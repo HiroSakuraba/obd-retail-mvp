@@ -61,12 +61,12 @@ def decode_dtc(b1, b2):
     return "%s%X%X%X%X" % (sys, (b1 >> 4) & 3, b1 & 15, b2 >> 4, b2 & 15)
 
 
-def parse_dtcs(response):
+def parse_dtcs(response, response_sid=0x43):
     toks = " ".join(sanitize(response)).split()
     byts = [int(t, 16) for t in toks]
-    if 0x43 not in byts:
-        raise ValueError("no '43' service header in DTC response")
-    i = byts.index(0x43)
+    if response_sid not in byts:
+        raise ValueError("no '%02X' service header in DTC response" % response_sid)
+    i = byts.index(response_sid)
     out, j = [], i + 1
     while j + 1 < len(byts):
         b1, b2 = byts[j], byts[j + 1]
@@ -183,6 +183,26 @@ def test_dtc_multiframe_numbered():
 
 def test_dtc_with_headers():
     assert parse_dtcs("7E8 04 43 01 71 01 33\r\n>") == ["P0171", "P0133"]
+
+
+# Service 07 / 0A use positive-response SIDs 0x47 / 0x4A, not 0x43.
+# Regression test for the parser that rejected compliant 47/4A responses.
+def test_dtc_pending_sid_47():
+    assert parse_dtcs("47 01 71\r\n>", response_sid=0x47) == ["P0171"]
+    assert parse_dtcs("47 00\r\n>", response_sid=0x47) == []
+
+
+def test_dtc_permanent_sid_4a():
+    assert parse_dtcs("4A 04 20\r\n>", response_sid=0x4A) == ["P0420"]
+    assert parse_dtcs("4A 00\r\n>", response_sid=0x4A) == []
+
+
+def test_dtc_wrong_sid_rejected():
+    # A 47 response must not parse as service 03 (and vice versa).
+    with pytest.raises(ValueError):
+        parse_dtcs("47 01 71\r\n>")
+    with pytest.raises(ValueError):
+        parse_dtcs("43 01 71\r\n>", response_sid=0x47)
 
 
 @pytest.mark.parametrize("pid,payload,expected", [

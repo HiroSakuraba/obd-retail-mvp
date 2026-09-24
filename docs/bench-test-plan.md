@@ -56,6 +56,25 @@ Procedure:
 
 **Pass criteria (Stage B):** all 8 steps pass on the bench rig.
 
+### Stage B, step 5b — freeze frame (Mode 02) [TODO: Kotlin not yet wired]
+
+The firmware allowlist and the Python/TCP simulator already support Mode 02
+(`read_freeze_frame` → service `0x02`, same PID allowlist as Mode 01;
+`0202` returns the frozen snapshot). The Android side still needs:
+
+- `Elm327Protocol` / `Elm327BleTransport`: a `readFreezeFrame()` that sends
+  `0202` and parses the `42 02 <DTC> <PID><data>…` payload into
+  `{dtc: String, pids: Map<String, Double>}` using the existing Mode-01 PID
+  decoders (a frozen PID decodes exactly like a live one);
+- `VehicleSession`: carry the freeze frame as a first-class object next to
+  `dtcs` (do not merge it into live PID values);
+- backend already accepts it at `POST /v1/sessions/{id}/freeze-frame` and
+  echoes it in `/diagnosis`.
+
+The ELM327 allowed-command set for the commodity path is therefore:
+`0902`, `03`, `07`, `0A`, `0202`, and `01xx` for allowlisted PIDs — plus the
+AT init sequence. Nothing else may be transmitted.
+
 ## Stage C — 5-vehicle checklist (M1 release criterion)
 
 Repeat Stage B steps 2–5 on five vehicles spanning: two makes (e.g. Ford +

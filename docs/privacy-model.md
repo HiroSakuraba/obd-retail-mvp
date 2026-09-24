@@ -32,17 +32,36 @@ from coarse, user-supplied or store-context data, never from tracks.
   returns repair families with **≥ 5 sessions** in the window
   (`minimum_privacy_count_met`). Smaller counts are suppressed, never
   rounded-and-shown.
+- k ≥ 5 suppression is necessary but not sufficient for a commercial
+  regional product: repeated queries and differencing across regions /
+  time windows can reveal small-cell information. The roadmap is
+  defense-in-depth — minimum cohorts *plus* fixed time buckets (no
+  arbitrary windowing), query restrictions (rate limits, no free-form
+  slicing), retailer access control on which cuts each partner may see,
+  and statistical noise on small counts — rather than exposing raw
+  counts to arbitrary queries.
 - No per-vehicle or per-user rows are ever exposed to retail partners —
   only counts, baselines, and ratios per region bucket.
 - Outcome feedback (did the repair work) is aggregated the same way before
   it can influence graph priors.
+
+**Current endpoint semantics (honest):** today's `/v1/analytics/demand`
+counts diagnostic-family sessions over all in-memory sessions — there is
+no 7-day filtering despite the `sessions_7d` field name, and no region,
+timestamp, fitment, SKU, confidence, outcome, conversion, baseline, or
+forecast fields. Treat it as `diagnostic_family_counts`; the full demand
+model above is roadmap, not current behavior.
 
 ## Retention and control
 
 - Raw sessions: retained only as long as needed for outcome verification
   (target: 90 days), then reduced to aggregates.
 - Users can delete their sessions; deletion propagates to aggregates on the
-  next aggregation run.
+  next aggregation run. Design note: once raw sessions are folded into
+  aggregates, "deletion propagates" needs a contribution ledger (per-user
+  contribution records that can be subtracted) or a full aggregate
+  recomputation path — otherwise the promise is not implementable. Pick
+  one before retailer-scale deployment.
 - Diagnostic graphs are versioned; a graph update never needs historical
   raw sessions, only the aggregated outcome counts.
 

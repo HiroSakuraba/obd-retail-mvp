@@ -110,6 +110,22 @@ static void test_dtc_and_vin_ops(void)
     make_req(&r, 1, "t14", "read_dtcs_permanent", NULL);
     CHECK(obd_dispatch(&r, &op) == OBD_OK && obd_service_for(op) == 0x0A,
           "read_dtcs_permanent -> service 0A");
+
+    make_req(&r, 1, "t14b", "read_freeze_frame", "05");
+    CHECK(obd_dispatch(&r, &op) == OBD_OK && op == OP_READ_FREEZE_FRAME &&
+          obd_service_for(op) == 0x02,
+          "read_freeze_frame 05 -> service 02");
+
+    make_req(&r, 1, "t14c", "read_freeze_frame", "FF");
+    CHECK(obd_dispatch(&r, &op) == OBD_ERR_PID_NOT_ALLOWED,
+          "read_freeze_frame with non-allowlisted pid rejected");
+
+    make_req(&r, 1, "t14d", "read_pid", "14");
+    CHECK(obd_dispatch(&r, &op) == OBD_OK,
+          "read_pid 14 (upstream O2 voltage) allowed");
+    make_req(&r, 1, "t14e", "read_pid", "15");
+    CHECK(obd_dispatch(&r, &op) == OBD_OK,
+          "read_pid 15 (downstream O2 voltage) allowed");
 }
 
 static void test_version_mismatch(void)

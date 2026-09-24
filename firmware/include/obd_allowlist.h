@@ -12,13 +12,16 @@ extern "C" {
 
 /* Read-only operations the dongle will ever perform. There is deliberately
    no raw-CAN-write operation and no API to add one: a retail giveaway
-   dongle must not become a generic vehicle command-injection interface. */
+   dongle must not become a generic vehicle command-injection interface.
+   Transport-layer frames strictly necessary to receive a response (ISO-TP
+   flow control) are the only other bytes the dongle may transmit. */
 typedef enum {
     OP_READ_VIN,
     OP_READ_CURRENT_DTCS,
     OP_READ_PENDING_DTCS,
     OP_READ_PERMANENT_DTCS,
     OP_READ_PID,
+    OP_READ_FREEZE_FRAME,
     OP_INVALID
 } obd_op_t;
 
@@ -33,8 +36,8 @@ typedef enum {
 /* Map a parsed request to an allowlisted op (OP_INVALID if not allowed). */
 obd_op_t obd_op_from_request(const ble_request_t *req);
 
-/* OBD service byte to send on the CAN bus for an op (0x01/0x03/0x07/0x09/0x0A).
-   Returns 0 for OP_INVALID. */
+/* OBD service byte to send on the CAN bus for an op
+   (0x01/0x02/0x03/0x07/0x09/0x0A). Returns 0 for OP_INVALID. */
 uint8_t obd_service_for(obd_op_t op);
 
 /* True if the two-hex-digit PID string is on the read allowlist. */

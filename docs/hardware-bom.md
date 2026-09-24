@@ -2,13 +2,21 @@
 
 Target: a giveaway-cheap, deliberately boring dongle. Read-only by design.
 
+**On the "$3 dongle":** treat $3 as an engineering *target and hypothesis*,
+not an established figure — the numbers below are component+assembly
+targets at very high volume, before certification, packaging, logistics,
+yield loss, and support. The business model does not need exactly $3.00:
+the bar that matters is *landed giveaway cost comfortably below lifetime
+incremental gross profit per user*. Drive the raw electronics toward $3;
+judge the product on the landed economics.
+
 ## Target high-volume BOM
 
 | Block | Function | Target cost |
 |---|---|---|
 | BLE microcontroller | Phone link + allowlist state machine; enough flash for signed OTA firmware | $0.55–0.90 |
-| CAN controller/transceiver | ISO 15765-4 physical/data-link; automotive-qualified PHY preferred | $0.15–0.35 |
-| Power/protection | 12–14.4 V → logic rail; reverse-polarity, load-dump/transient protection, sleep mode | $0.25–0.50 |
+| CAN controller/transceiver | ISO 15765-4 physical/data-link; automotive-qualified PHY preferred. **High-impedance diagnostic node only — do NOT add another 120 Ω termination across pins 6/14**; the vehicle bus is already terminated at both ends. | $0.15–0.35 |
+| Power/protection | 12–14.4 V → logic rail; reverse-polarity, load-dump/transient protection, sleep mode. Quiescent draw is a first-order spec: a permanently connected dongle spends nearly all its life asleep, and battery drain is one of the earliest things to measure on the bench (target: sleep current low enough that a parked car is unaffected over weeks). | $0.25–0.50 |
 | SAE J1962 connector | 16-pin male; pins 4/5 ground, 6/14 CAN, 16 battery | $0.30–0.55 |
 | PCB + passives | 2-layer, compact right-angle layout | $0.20–0.40 |
 | Enclosure | No cable; compact right-angle, one LED | $0.15–0.30 |
@@ -31,8 +39,9 @@ These targets are component+assembly only. A real product budget must add:
 - **Packaging, logistics, yield loss, support, retailer distribution** —
   all separate from the BOM and typically larger than the BOM at
   giveaway volumes.
-- **Security**: secure element or OTP fuses for firmware-signing keys,
-  per-unit key provisioning on the manufacturing line.
+- **Security**: secure element or OTP fuses for the firmware *verification*
+  key (the signing private key never leaves the manufacturer) and the
+  per-device attestation identity, provisioned on the manufacturing line.
 
 ## Bench MVP (M1) shopping list
 

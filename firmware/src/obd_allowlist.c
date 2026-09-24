@@ -1,9 +1,13 @@
 /* obd_allowlist.c - read-only OBD command allowlist.
  *
  * This is the entire attack surface of the dongle's CAN side: a request is
- * either mapped to one of five read-only OBD services or refused. There is
+ * either mapped to one of six read-only OBD services or refused. There is
  * no code path that transmits an arbitrary CAN frame; adding one would be a
  * deliberate product decision, not an accident of this file.
+ *
+ * Security definition: the device may transmit only allowlisted diagnostic
+ * requests plus the transport-layer frames strictly necessary to receive
+ * their responses (ISO-TP flow control). It never transmits anything else.
  */
 
 #include "obd_allowlist.h"
@@ -28,6 +32,8 @@ static const char *const PID_ALLOWLIST[] = {
     "0F", /* intake air temperature */
     "10", /* MAF air flow rate */
     "11", /* throttle position */
+    "14", /* O2 sensor 1 voltage (bank 1, sensor 1) — needed by P0133/P0420 */
+    "15", /* O2 sensor 2 voltage (bank 1, sensor 2) — needed by P0420 */
     "1F", /* run time since engine start */
     "21", /* distance traveled with MIL on */
     "2F", /* fuel tank level input */
@@ -73,6 +79,8 @@ obd_op_t obd_op_from_request(const ble_request_t *req)
         return OP_READ_PERMANENT_DTCS;
     if (strcmp(req->op, "read_pid") == 0)
         return OP_READ_PID;
+    if (strcmp(req->op, "read_freeze_frame") == 0)
+        return OP_READ_FREEZE_FRAME;
     return OP_INVALID;
 }
 
@@ -83,7 +91,8 @@ uint8_t obd_service_for(obd_op_t op)
     case OP_READ_CURRENT_DTCS:  return 0x03;
     case OP_READ_PENDING_DTCS:  return 0x07;
     case OP_READ_PERMANENT_DTCS:return 0x0A;
-    case OP_READ_PID:           return 0x01;
+    case OP_READ_PID:           return 0x01; /* + PID */
+    case OP_READ_FREEZE_FRAME:  return 0x02; /* + PID (frozen at DTC set) */
     default:                    return 0x00;
     }
 }
@@ -100,7 +109,11 @@ obd_result_t obd_dispatch(const ble_request_t *req, obd_op_t *op_out)
     op = obd_op_from_request(req);
     if (op == OP_INVALID)
         return OBD_ERR_FORBIDDEN_COMMAND;
-    if (op == OP_READ_PID && !pid_allowlisted(req->pid))
+    /* Both live PID reads and freeze-frame reads are gated on the same
+       Mode-01 PID allowlist: a frozen PID is no more sensitive than a
+       live one, and the set the graphs need is identical. */
+    if ((op == OP_READ_PID || op == OP_READ_FREEZE_FRAME)
+        && !pid_allowlisted(req->pid))
         return OBD_ERR_PID_NOT_ALLOWED;
 
     if (op_out)

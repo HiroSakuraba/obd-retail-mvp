@@ -40,8 +40,11 @@
   <h1>Glovebox OBD — Interactive MVP Demo</h1>
   <p class="lede">A mock of the product logic with no real vehicle. Pick a fault
   family, tap “Scan vehicle” to inject a VIN, the DTC, and live values; the
-  diagnosis is deterministic — posterior(h) ∝ prior(h) × likelihood multipliers
-  from the evidence graph.</p>
+  diagnosis is deterministic — diagnostic_score(h) ∝ prior(h) × evidence
+  multipliers from the evidence graph. Scores are <em>uncalibrated expert
+  weights</em>, not true probabilities: two rules read from one measurement
+  count once (the stronger wins), and a score alone never sells a part —
+  replacement repairs need confirming evidence first.</p>
 
   <div class="grid">
     <div class="span4 card"><div class="small">Vehicle</div>
@@ -78,8 +81,12 @@
   <div class="note"><strong>Design rule:</strong> a DTC is evidence, not a parts
   recommendation. Nothing below names a part until the evidence supports a cause —
   and even then the basket is provisional until confirmed. Watch P0420: the first
-  test points at the catalytic converter, but the basket stays empty until a second
-  test confirms it.</div>
+  test points at the catalytic converter, but the basket stays empty until an
+  independent check rules out an exhaust leak. Watch P0171: the trim test only
+  unlocks <em>guidance</em> ("inspect the intake next") — the hose itself stays
+  gated until a leak is seen. And the graph never names a SKU: the part, price,
+  and fitment come from a separate fitment layer keyed off the repair action and
+  the VIN.</div>
 </div>
 
 <script>
@@ -98,11 +105,20 @@ P0171: {
     name:'Fuel trim at idle vs 2,500 RPM',
     updates:{vacuumLeak:2.2, mafBias:.75, fuelDelivery:.7},
     evidence:'<br><strong>Test:</strong> at 2,500 RPM combined fuel trim fell from +33% to +12%. ' +
-      'That pattern raises the probability of an intake/vacuum leak.',
-    status:'Next physical check: inspect the intake duct, PCV/vacuum hoses and obvious leak points. ' +
-      'A smoke test can confirm the leak before buying any part.'
+      'That pattern raises the score of an intake/vacuum leak to moderate — ' +
+      'but a score alone never sells a part.',
+    status:'Next step (guidance, not a part): inspect the intake duct, PCV/vacuum hoses and ' +
+      'obvious leak points. The hose stays gated until a leak is actually seen.'
+  },{
+    name:'Intake visual inspection (leak found)',
+    updates:{vacuumLeak:3.0},
+    evidence:'<br><strong>Test:</strong> a split PCV hose is visible — the confirming evidence ' +
+      'the part sale was gated on. Vacuum leak is now the strong leader.',
+    status:'Evidence confirmed. Build the basket — the hose is unlocked.'
   }],
-  basketConfidence:'moderate',
+  basketConfidence:'moderate → strong after confirmation',
+  fitment:{sku:'HOSE-INTAKE-ESC15', price:'$24.99',
+    note:'Exact fit for the demo VIN (2018 Ford Escape 1.5L) — resolved from the repair action, not the graph'},
   basketRows:[
     ['Vehicle-specific PCV / intake hose','Only after visual/smoke confirmation','View exact-fit part'],
     ['Hose pliers','Clamp removal','Buy or loan'],
@@ -182,25 +198,27 @@ P0420: {
   labels:{cat:'Failing catalytic converter', o2sensor:'Downstream O₂ sensor fault',
     exhaustLeak:'Exhaust leak', misfireHist:'Misfire history', other:'Other'},
   tests:[{
-    name:'O₂ switching ratio at cruise',
+    name:'O₂ cruise trace — one 60 s measurement',
     updates:{cat:2.6, o2sensor:.7, exhaustLeak:.8, misfireHist:.9},
     evidence:'<br><strong>Test:</strong> the downstream sensor is switching almost like the upstream ' +
-      'one (ratio 0.82) — the converter is not storing oxygen. But this alone is only moderate ' +
-      'evidence: a catalytic converter is expensive, so the basket stays empty.',
-    status:'Moderate evidence for the converter — not enough for a $1,000 part. Run the confirmation ' +
-      'test: downstream voltage swing at cruise.'
+      'one (ratio 0.82) — the converter is not storing oxygen. One measurement, counted once: ' +
+      'the second O₂ reading from the same trace does not multiply the score again.',
+    status:'Moderate evidence for the converter — not enough for a $1,000 part. The independent ' +
+      'check is ruling out an exhaust leak ahead of the sensor.'
   },{
-    name:'Downstream O₂ voltage swing (confirmation)',
-    updates:{cat:2.0, o2sensor:.6},
-    evidence:'<br><strong>Test:</strong> downstream voltage swings 0.65 V peak-to-peak — a healthy ' +
-      'converter holds it nearly flat. Two independent O₂ tests now agree.',
-    status:'Strong evidence. The converter is the cause — and only now does the basket offer one.'
+    name:'Exhaust leak visual check (no leak found)',
+    updates:{cat:1.4, exhaustLeak:.25},
+    evidence:'<br><strong>Test:</strong> no leak ahead of the downstream sensor — the main ' +
+      'alternative explanation is ruled out. Only now does the converter reach strong.',
+    status:'Strong evidence from two genuinely independent checks. The converter is the cause — ' +
+      'and only now does the basket offer one.'
   }],
   basketConfidence:'strong',
   basketRows:[
-    ['Catalytic converter (bank 1)','Two independent O₂ tests agree — never from the code alone','View exact-fit part'],
+    ['Catalytic converter (bank 1)','Trace + leak ruled out — never from the code alone','View exact-fit part'],
     ['O₂ sensor socket','Reuse or replace downstream sensor hardware','Buy or loan'],
     ['Exhaust gaskets + hardware','Consumables for the job','Buy']],
+  fitment:{sku:'CAT-CRV24-FED', price:'$849.99', note:'Federal-EPA part — verify CARB compliance in California'},
   verify:'<strong>Verification:</strong> the catalyst monitor needs several drive cycles to run — ' +
     'confirm P0420 stays clear and the monitor shows ready.'
 },
@@ -247,6 +265,8 @@ P0133: {
     status:'The upstream sensor is worn. Build the basket.'
   }],
   basketConfidence:'moderate',
+  fitment:{sku:'O2-UP-COROLLA18', price:'$74.99',
+    note:'Exact fit for the demo VIN (2013 Toyota Corolla 1.8L) — resolved from the repair action, not the graph'},
   basketRows:[
     ['Upstream O₂ sensor (bank 1, sensor 1)','Switching rate far below spec; the sensor is lazy','View exact-fit part'],
     ['O₂ sensor socket','Required for removal','Buy or loan']],
@@ -331,11 +351,16 @@ $('repairBtn').onclick = () => {
   const fam = FAMILIES[state.fam];
   const rows = fam.basketRows.map(r =>
     `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+  // The graph outputs a repair ACTION; the fitment layer resolves the SKU.
+  const fit = fam.fitment ?
+    `<tr><td><strong>Exact-fit part (fitment resolver):</strong> ${fam.fitment.sku} — ${fam.fitment.price}</td>` +
+    `<td>${fam.fitment.note}</td><td>Buy</td></tr>` :
+    `<tr><td colspan="3" class="small">Fitment resolver: no mock SKU wired for this demo family.</td></tr>`;
   $('basket').innerHTML =
-    `<table><tr><th>Item</th><th>Why</th><th>MVP action</th></tr>${rows}</table><p>${fam.verify}</p>`;
+    `<table><tr><th>Item</th><th>Why</th><th>MVP action</th></tr>${rows}${fit}</table><p>${fam.verify}</p>`;
   $('status').innerHTML = '<strong>Basket generated (confidence: ' + fam.basketConfidence + ').</strong> ' +
-    'In production the retailer adapter resolves VIN fitment, local inventory, price, loaner tools, ' +
-    'and pickup location.';
+    'Diagnosis → repair action → fitment: the retailer adapter resolves VIN fitment, local inventory, ' +
+    'price, loaner tools, and pickup location from the action, never from the graph.';
 };
 
 $('resetBtn').onclick = reset;
