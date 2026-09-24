@@ -43,3 +43,47 @@ VIN reassembly, PID round-trips incl. `010C`→`41 0C 1A F8` at 1,726 rpm,
 freeze frame, `?`/`NO DATA` paths, fault-physics assertions), plus a DOM-stub
 smoke test driving the picker, slider, terminal, and scripted scan end to
 end. Works from `file://` — zero external requests.
+
+## Real-adapter BLE scan page
+
+`ble-adapter-scan.html` — the browser equivalent of the ELM327 client for
+**real hardware**. Pair a phone or laptop with a real BLE OBD-II adapter and
+run the product's read-only scan sequence against a real car.
+
+- **WebBluetooth connect flow** — "Scan for adapter" → device chooser →
+  GATT → Nordic UART service/characteristics. The service, TX, and RX UUIDs
+  are text inputs defaulting to Nordic UART
+  (`6e400001-…-cca9e` / `…0002…` / `…0003…`) because ELM327 BLE clones vary —
+  paste your adapter's UUIDs if it uses different ones.
+- **Read-only by construction** — there is no free-form command input. Only
+  the hardcoded allowlist can ever be written (`ATZ/ATE0/ATL0/ATS0/ATH0/
+  ATSP0/ATDP/ATHV/0902/03/07/0100/0120` + live PIDs `0104/0105/0106/0107/
+  010B/010C/010D/0110/0111/0114/0115`); anything else throws before it
+  reaches the radio. RX notifications are reassembled across MTU chunks
+  until the `>` prompt arrives, with a 6 s per-command timeout.
+- **Results** — VIN (multi-frame reassembly), protocol, battery voltage,
+  confirmed + pending DTCs (SAE J2012, incl. `0x47` SID), live PIDs decoded
+  per SAE J1979. "Copy evidence JSON" emits
+  `{vin, protocol, dtcs:[{code,status}], pids:{…}, scanned_at}` shaped for
+  the backend `/diagnosis` path.
+
+### Browser support
+
+| Browser | Works? |
+|---|---|
+| Chrome / Edge on Android | Yes |
+| Chrome / Edge on macOS / Windows | Yes |
+| iOS Safari (any iPhone browser) | **No** — WebBluetooth is unsupported; iPhones need the future native app |
+
+You need a **BLE** adapter (Veepeak BLE / BLE+ class). WiFi-only adapters
+cannot talk to a browser page. Pairing happens in-page — do not pair in
+system Bluetooth settings first.
+
+### Verification
+
+`node --check` clean, zero external requests. 27/27 tests pass under node
+with a mocked `navigator.bluetooth`: full VIN reassembly from frames split
+mid-frame across notification chunks, 2-DTC decode, `010C` → 1,726 rpm with
+the `>` prompt itself split across chunks, echo stripping, per-command
+timeout, chooser-cancel error path, and an assertion that every byte written
+during the mock scan was an allowlisted command.

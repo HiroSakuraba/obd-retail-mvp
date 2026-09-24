@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Glovebox OBD — Real Adapter BLE Scan</title>
+<style>
+  :root{--bg:#0b0d12;--panel:#11151d;--text:#eef2f7;--muted:#9aa6b2;
+        --accent:#0ff1ce;--warn:#f3b25b;--danger:#ff6b6b;--line:#283141}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#090b0f,#0d1118 45%,#0b0d12);
+       color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:960px;margin:auto;padding:24px 16px 60px}
+  h1{font-size:clamp(1.4rem,4vw,2rem);letter-spacing:-.03em;margin:.2em 0}
+  h2{font-size:1.2rem;margin:.2em 0 .6em}
+  .lede{color:#c9d3df;max-width:860px}
+  .card{background:rgba(17,21,29,.94);border:1px solid var(--line);border-radius:16px;
+        padding:18px;margin:14px 0}
+  .small{font-size:.86rem;color:var(--muted)}
+  button{border:0;border-radius:14px;padding:16px 22px;font-weight:800;font-size:1.05rem;
+         cursor:pointer;background:var(--accent);color:#00130f;margin:6px 8px 6px 0;
+         min-height:56px;touch-action:manipulation}
+  button.secondary{background:#222b37;color:#e8eef5;border:1px solid #334052}
+  button.danger{background:#3a2025;color:#ffd9df;border:1px solid #65333c}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  input[type=text]{background:#0a0e14;color:#e8eef5;border:1px solid #334052;border-radius:10px;
+         padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;width:100%}
+  label{display:block;margin:8px 0 2px}
+  .uuidgrid{display:grid;grid-template-columns:1fr;gap:6px}
+  @media(min-width:700px){.uuidgrid{grid-template-columns:1fr 1fr 1fr}}
+  .term{background:#05070b;border:1px solid #263243;border-radius:12px;padding:12px;
+        font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.55;
+        height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+  .term .t{color:#5b6b7d}.term .cmd{color:var(--accent)}.term .err{color:var(--danger)}
+  .term .ok{color:#9fe8d4}
+  .statusbar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;
+             background:#0a0e14;border:1px solid #263243;margin:12px 0;font-weight:700}
+  .dot{width:14px;height:14px;border-radius:50%;background:#5b6b7d;flex:none}
+  .dot.on{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  .dot.err{background:var(--danger)}
+  .note{border-left:4px solid var(--accent);padding:10px 14px;background:#0e1518;
+        border-radius:8px;margin:14px 0;color:#dbe2ea}
+  .warnbox{border-left-color:var(--warn);background:#18140d}
+  .errbox{border-left-color:var(--danger);background:#1a0f12}
+  table{width:100%;border-collapse:collapse;font-size:.93rem}
+  th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
+  .kpi{font-size:1.25rem;font-weight:800;font-variant-numeric:tabular-nums}
+  ol.steps{margin:.4em 0;padding-left:1.4em;color:#c9d3df}
+  ol.steps li{margin:.3em 0}
+  .footer{margin:40px 0 20px;color:#778493;font-size:.85rem}
+  pre.evidence{background:#05070b;border:1px solid #263243;border-radius:12px;padding:12px;
+        font-size:.8rem;overflow-x:auto;max-height:280px;overflow-y:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Real Adapter BLE Scan</h1>
+  <p class="lede">Pair this phone or laptop with a real commodity BLE OBD-II adapter
+  (Veepeak-class) and run the product's <strong>read-only</strong> scan sequence.
+  There is no free-form command input on this page — only the allowlisted scan
+  commands can ever be sent, matching the app's read-only stance.</p>
+
+  <div class="card">
+    <h2>Before you start</h2>
+    <ol class="steps">
+      <li>Plug the adapter into the car's OBD-II port (under the dash).</li>
+      <li>Turn the ignition on — engine running is best for live data.</li>
+      <li>Enable Bluetooth on this phone/laptop. You do <em>not</em> need to pair
+          in system settings; the page connects directly.</li>
+      <li>Tap <strong>Scan for adapter</strong> below and pick your adapter.</li>
+    </ol>
+    <div id="supportNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>1 · Connect</h2>
+    <div class="statusbar"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></div>
+    <div class="uuidgrid">
+      <div><label class="small" for="uuidSvc">Service UUID</label>
+        <input type="text" id="uuidSvc" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"/></div>
+      <div><label class="small" for="uuidTx">TX (write) UUID</label>
+        <input type="text" id="uuidTx" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"/></div>
+      <div><label class="small" for="uuidRx">RX (notify) UUID</label>
+        <input type="text" id="uuidRx" value="6e400003-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"/></div>
+    </div>
+    <p class="small">Defaults are Nordic UART, which most ELM327 BLE clones use.
+    If your adapter uses different UUIDs, paste them above before scanning.</p>
+    <button id="scanBtn">Scan for adapter</button>
+    <button id="discBtn" class="danger" disabled>Disconnect</button>
+  </div>
+
+  <div class="card">
+    <h2>2 · Run read-only scan</h2>
+    <p class="small">Runs the fixed allowlisted sequence: init → protocol → battery →
+    VIN → confirmed/pending DTCs → PID support → live PIDs. Nothing else can be sent.</p>
+    <button id="runBtn" disabled>Run scan</button>
+    <button id="copyBtn" class="secondary" disabled>Copy evidence JSON</button>
+    <div class="term" id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Results</h2>
+    <div id="results"><p class="small">No scan run yet.</p></div>
+  </div>
+
+  <div class="card">
+    <h2>4 · Evidence export</h2>
+    <p class="small">Shaped for the backend <code>/diagnosis</code> path
+    (<code>{vin, protocol, dtcs:[{code,status}], pids:{…}, scanned_at}</code>).</p>
+    <pre class="evidence" id="evidencePre">—</pre>
+  </div>
+
+  <div class="note warnbox"><strong>Browser support:</strong> WebBluetooth needs
+  Chrome or Edge on Android, macOS, or Windows. iOS Safari does not support
+  WebBluetooth — iPhones will need the future native app. You need a
+  <strong>BLE</strong> adapter; WiFi-only adapters can't talk to a browser page.</div>
+
+  <div class="footer">Read-only BLE scan for the Glovebox OBD retail MVP.
+  PID math per SAE J1979, DTC decode per SAE J2012.</div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   PURE CORE — no DOM access. Safe to unit-test under node.
+   ===================================================================== */
+
+/* Hardcoded read-only allowlist. sendCommand() refuses anything else. */
+const ALLOWLIST = [
+  'ATZ','ATE0','ATL0','ATS0','ATH0','ATSP0',
+  'ATDP','ATHV','0902','03','07','0100','0120',
+  '0104','0105','0106','0107','010B','010C','010D','0110','0111','0114','0115'
+];
+function assertAllowlisted(cmd){
+  if(ALLOWLIST.indexOf(cmd) === -1) throw new Error('Refusing non-allowlisted command: ' + cmd);
+  return true;
+}
+
+/* ---- SAE J1979 PID decode table (decode-only is enough for a scanner) ---- */
+const PIDS = {
+  0x04:{name:'Engine load',  unit:'%',    dec:b=>b[0]*100/255},
+  0x05:{name:'Coolant temp', unit:'°C',   dec:b=>b[0]-40},
+  0x06:{name:'STFT bank 1',  unit:'%',    dec:b=>(b[0]-128)*100/128},
+  0x07:{name:'LTFT bank 1',  unit:'%',    dec:b=>(b[0]-128)*100/128},
+  0x0B:{name:'MAP',          unit:'kPa',  dec:b=>b[0]},
+  0x0C:{name:'RPM',          unit:'rpm',  dec:b=>((b[0]*256)+b[1])/4},
+  0x0D:{name:'Speed',        unit:'km/h', dec:b=>b[0]},
+  0x10:{name:'MAF',          unit:'g/s',  dec:b=>((b[0]*256)+b[1])/100},
+  0x11:{name:'Throttle',     unit:'%',    dec:b=>b[0]*100/255},
+  0x14:{name:'O2 B1S1',      unit:'V',    dec:b=>b[0]*0.005},
+  0x15:{name:'O2 B1S2',      unit:'V',    dec:b=>b[0]*0.005},
+};
+const SCAN_PIDS = [0x04,0x05,0x06,0x07,0x0B,0x0C,0x0D,0x10,0x11,0x14,0x15];
+function pidCmd(pid){ return '01' + pid.toString(16).toUpperCase().padStart(2,'0'); }
+function decodePid(pid, bytes){
+  const d = PIDS[pid];
+  if(!d || !bytes || bytes.length < 1) return null;
+  try { return {name:d.name, unit:d.unit, value:d.dec(bytes)}; }
+  catch(e){ return null; }
+}
+
+/* ---- SAE J2012 DTC decode ---- */
+const DTC_LETTERS = ['P','C','B','U'];
+function dtcFromBytes(b1, b2){
+  const code = DTC_LETTERS[(b1>>6)&3] + ((b1>>4)&3) + (b1&15).toString(16).toUpperCase()
+    + b2.toString(16).toUpperCase().padStart(2,'0');
+  return code === 'P0000' ? null : code;
+}
+/* Parse a Mode 03/07 response body. Accepts SID 0x43 (confirmed) or 0x47 (pending). */
+function parseDtcResponse(text){
+  const clean = String(text).replace(/\s+/g,' ').trim();
+  const m = clean.match(/\b(43|47)\b([\s0-9A-Fa-f]*)/);
+  if(!m) return {sid:null, codes:[]};
+  const toks = m[2].trim().split(/\s+/).filter(t=>/^[0-9A-Fa-f]{2}$/.test(t));
+  const codes = [];
+  for(let i=0; i+1<toks.length; i+=2){
+    const code = dtcFromBytes(parseInt(toks[i],16), parseInt(toks[i+1],16));
+    if(code) codes.push(code);
+  }
+  return {sid:parseInt(m[1],16), codes};
+}
+/* Parse a Mode 01 PID response body; returns data bytes or null. */
+function parsePidBytes(text, pid){
+  const clean = String(text).replace(/\s+/g,' ').trim();
+  const want = '41 ' + pid.toString(16).toUpperCase().padStart(2,'0');
+  const idx = clean.toUpperCase().indexOf(want);
+  if(idx === -1) return null;
+  const toks = clean.slice(idx + want.length).trim().split(/\s+/)
+    .filter(t=>/^[0-9A-Fa-f]{2}$/.test(t)).map(t=>parseInt(t,16));
+  return toks.length ? toks : null;
+}
+/* Reassemble a 0902 multi-frame VIN: lines "0: 49 02 01 ...", "1: ...", "2: ...". */
+function reassembleVin(text){
+  const frames = {};
+  String(text).split(/[\r\n]+/).forEach(line=>{
+    const m = line.match(/^\s*([0-9A-Fa-f])\s*:\s*((?:[0-9A-Fa-f]{2}\s*)+)/);
+    if(m) frames[parseInt(m[1],16)] = m[2].trim().split(/\s+/).map(t=>parseInt(t,16));
+  });
+  const keys = Object.keys(frames).map(Number).sort((a,b)=>a-b);
+  if(!keys.length || keys[0] !== 0) return null;
+  let bytes = [];
+  keys.forEach(k=>{ bytes = bytes.concat(frames[k]); });
+  if(bytes.length >= 3 && bytes[0]===0x49 && bytes[1]===0x02 && bytes[2]===0x01) bytes = bytes.slice(3);
+  const vin = bytes.map(b=>String.fromCharCode(b)).join('').replace(/[^A-HJ-NPR-Z0-9]/g,'');
+  return vin.length === 17 ? vin : null;
+}
+/* Strip the command echo (ELM327 echoes the command + '\r' when echo is on). */
+function stripEcho(text, cmd){
+  let t = String(text);
+  const up = t.toUpperCase();
+  const c = String(cmd).toUpperCase();
+  if(up.startsWith(c)){
+    t = t.slice(c.length).replace(/^[\r\n]+/, '');
+  }
+  return t;
+}
+
+/* ---- Chunk reassembler: RX notifications split across MTU boundaries.
+   A response is complete when the '>' prompt arrives (even mid-chunk). ---- */
+class ChunkReassembler {
+  constructor(){ this.buf = ''; }
+  push(chunkText){
+    this.buf += String(chunkText);
+    const out = [];
+    let i;
+    while((i = this.buf.indexOf('>')) !== -1){
+      out.push(this.buf.slice(0, i));
+      this.buf = this.buf.slice(i + 1);
+    }
+    return out;
+  }
+}
+
+/* ---- ELM327 session over an injected byte transport.
+   write: async (Uint8Array) => void. No DOM, no Bluetooth here. ---- */
+class ElmSession {
+  constructor(write, opts){
+    this._write = write;
+    this._reasm = new ChunkReassembler();
+    this._pending = null;           // {cmd, resolve, reject, timer}
+    this._queue = [];
+    this._timeoutMs = (opts && opts.timeoutMs) || 6000;
+    this._setTimeout = (opts && opts.setTimeout) || setTimeout;
+    this._clearTimeout = (opts && opts.clearTimeout) || clearTimeout;
+    this._textDecoder = (opts && opts.textDecoder) || new TextDecoder();
+  }
+  /* Feed raw bytes from RX notifications. */
+  onData(bytes){
+    const text = this._textDecoder.decode(bytes, {stream:true});
+    const done = this._reasm.push(text);
+    for(const raw of done) this._deliver(raw);
+  }
+  _deliver(raw){
+    const p = this._pending;
+    if(!p) return;                    // late/unsolicited data: ignore
+    this._pending = null;
+    this._clearTimeout(p.timer);
+    p.resolve(stripEcho(raw, p.cmd));
+    this._pump();
+  }
+  _pump(){
+    if(this._pending || !this._queue.length) return;
+    const item = this._queue.shift();
+    this._pending = item;
+    const payload = new TextEncoder().encode(item.cmd + '\r');
+    item.timer = this._setTimeout(()=>{
+      if(this._pending === item){
+        this._pending = null;
+        item.reject(new Error('No response within ' + item.timeoutMs + ' ms for ' + item.cmd +
+          ' — is the adapter still connected and the ignition on?'));
+        this._pump();
+      }
+    }, item.timeoutMs);
+    Promise.resolve(this._write(payload)).catch(err=>{
+      if(this._pending === item){
+        this._pending = null;
+        this._clearTimeout(item.timer);
+        item.reject(err);
+        this._pump();
+      }
+    });
+  }
+  /* Sends exactly one allowlisted command; resolves with the echo-stripped
+     response text (without the '>' prompt). */
+  sendCommand(cmd, opts){
+    assertAllowlisted(cmd);
+    const timeoutMs = (opts && opts.timeoutMs) || this._timeoutMs;
+    return new Promise((resolve, reject)=>{
+      this._queue.push({cmd, resolve, reject, timer:null, timeoutMs});
+      this._pump();
+    });
+  }
+}
+
+/* WebBluetooth wiring: takes a bluetooth provider (injectable for tests). */
+async function connectAdapter(bluetooth, uuids, session, hooks){
+  hooks = hooks || {};
+  const onStatus = hooks.onStatus || (()=>{});
+  onStatus('Requesting Bluetooth device…');
+  let device;
+  try {
+    device = await bluetooth.requestDevice({
+      filters: [{services: [uuids.service]}],
+      optionalServices: [uuids.service]
+    });
+  } catch(e){
+    throw new Error(e && e.name === 'NotFoundError'
+      ? 'Device chooser cancelled — no adapter selected.'
+      : 'Bluetooth device request failed: ' + (e && e.message || e));
+  }
+  onStatus('Connecting GATT…');
+  let server;
+  try { server = await device.gatt.connect(); }
+  catch(e){ throw new Error('GATT connect failed: ' + (e && e.message || e)); }
+  let svc;
+  try { svc = await server.getPrimaryService(uuids.service); }
+  catch(e){ throw new Error('UART service not found on this device — check the Service UUID. (' + (e && e.message || e) + ')'); }
+  let tx, rx;
+  try {
+    tx = await svc.getCharacteristic(uuids.tx);
+    rx = await svc.getCharacteristic(uuids.rx);
+  } catch(e){ throw new Error('TX/RX characteristic not found — check the UUIDs. (' + (e && e.message || e) + ')'); }
+  await rx.startNotifications();
+  rx.addEventListener('characteristicvaluechanged', ev=>{
+    session.onData(new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength));
+  });
+  if(hooks.onDisconnect) device.addEventListener('gattserverdisconnected', hooks.onDisconnect);
+  const write = bytes => tx.writeValue(bytes);
+  return {device, server, write};
+}
+
+/* =====================================================================
+   PAGE GLUE — DOM + WebBluetooth. Not executed under node tests.
+   ===================================================================== */
+function initPage(){
+  const $ = id => document.getElementById(id);
+  const logEl = $('log'), resultsEl = $('results'), evPre = $('evidencePre');
+  const scanBtn = $('scanBtn'), runBtn = $('runBtn'), discBtn = $('discBtn'), copyBtn = $('copyBtn');
+  const dot = $('connDot'), connText = $('connText');
+
+  const btOK = typeof navigator !== 'undefined' && !!navigator.bluetooth;
+  if(!btOK){
+    $('supportNote').innerHTML = '<div class="note errbox"><strong>This browser can\'t do Bluetooth.</strong> ' +
+      'WebBluetooth needs Chrome or Edge on Android, macOS, or Windows. ' +
+      'iOS Safari is not supported — iPhones will need the future native app.</div>';
+    scanBtn.disabled = true;
+  }
+
+  function ts(){ return new Date().toLocaleTimeString(); }
+  function log(html, cls){
+    const div = document.createElement('div');
+    if(cls) div.className = cls;
+    div.innerHTML = '<span class="t">[' + ts() + ']</span> ' + html;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  let session = null, conn = null, evidence = null;
+
+  function setConn(on, text, err){
+    dot.className = 'dot' + (on ? ' on' : err ? ' err' : '');
+    connText.textContent = text;
+    discBtn.disabled = !on;
+    runBtn.disabled = !on;
+  }
+
+  scanBtn.addEventListener('click', async ()=>{
+    const uuids = {
+      service: $('uuidSvc').value.trim().toLowerCase(),
+      tx: $('uuidTx').value.trim().toLowerCase(),
+      rx: $('uuidRx').value.trim().toLowerCase()
+    };
+    session = new ElmSession(()=>{ throw new Error('not connected'); });
+    setConn(false, 'Connecting…');
+    log('Requesting Bluetooth device (UART service)…');
+    try {
+      conn = await connectAdapter(navigator.bluetooth, uuids, session, {
+        onStatus: s => log(esc(s), 'ok'),
+        onDisconnect: ()=>{ setConn(false, 'Disconnected by device', true); log('GATT disconnected.', 'err'); session = null; }
+      });
+      session._write = conn.write;
+      setConn(true, 'Connected: ' + (conn.device.name || 'adapter'));
+      log('Connected. RX notifications started.', 'ok');
+    } catch(e){
+      setConn(false, 'Not connected', true);
+      log('Connect failed: ' + esc(e.message), 'err');
+      session = null;
+    }
+  });
+
+  discBtn.addEventListener('click', ()=>{
+    try { if(conn && conn.device.gatt.connected) conn.device.gatt.disconnect(); } catch(e){}
+    conn = null; session = null;
+    setConn(false, 'Not connected');
+    log('Disconnected.');
+  });
+
+  async function cmd(label, command, timeoutMs){
+    log('<span class="cmd">&gt; ' + esc(command) + '</span> <span class="t">— ' + esc(label) + '</span>');
+    const t0 = Date.now();
+    try {
+      const resp = await session.sendCommand(command, {timeoutMs});
+      const ms = Date.now() - t0;
+      const preview = resp.replace(/[\r\n]+/g, ' ').trim().slice(0, 90);
+      log(esc(preview || '(empty)') + ' <span class="t">[' + ms + ' ms]</span>', 'ok');
+      return resp;
+    } catch(e){
+      log('ERROR: ' + esc(e.message), 'err');
+      throw e;
+    }
+  }
+  const pause = ms => new Promise(r=>setTimeout(r, ms));
+
+  runBtn.addEventListener('click', async ()=>{
+    if(!session) return;
+    runBtn.disabled = true; copyBtn.disabled = true;
+    evidence = {vin:null, protocol:null, battery_v:null, dtcs:[], pids:{}, scanned_at:null};
+    resultsEl.innerHTML = '<p class="small">Scanning…</p>';
+    try {
+      await cmd('Reset adapter', 'ATZ');            await pause(400);
+      await cmd('Echo off', 'ATE0');
+      await cmd('Linefeeds off', 'ATL0');
+      await cmd('Spaces off', 'ATS0');
+      await cmd('Headers off', 'ATH0');
+      await cmd('Auto protocol', 'ATSP0');          await pause(300);
+
+      const protoResp = await cmd('Describe protocol', 'ATDP');
+      evidence.protocol = protoResp.replace(/[\r\n> ]+/g,' ').trim();
+      const hv = await cmd('Battery voltage', 'ATHV');
+      const hvm = hv.replace(/\s+/g,'').match(/([0-9.]+)V/i);
+      evidence.battery_v = hvm ? parseFloat(hvm[1]) : null;
+
+      const vinResp = await cmd('Read VIN', '0902', 12000);
+      evidence.vin = reassembleVin(vinResp);
+
+      const c3 = parseDtcResponse(await cmd('Confirmed DTCs', '03'));
+      const c7 = parseDtcResponse(await cmd('Pending DTCs', '07'));
+      evidence.dtcs = c3.codes.map(c=>({code:c, status:'confirmed'}))
+        .concat(c7.codes.map(c=>({code:c, status:'pending'})));
+
+      await cmd('PID support 01–20', '0100');
+      await cmd('PID support 21–40', '0120');
+
+      for(const pid of SCAN_PIDS){
+        const resp = await cmd('Live PID ' + pidCmd(pid), pidCmd(pid));
+        const bytes = parsePidBytes(resp, pid);
+        const d = decodePid(pid, bytes);
+        if(d) evidence.pids[d.name] = {value: Math.round(d.value*1000)/1000, unit: d.unit};
+        await pause(120);
+      }
+      evidence.scanned_at = new Date().toISOString();
+      renderResults();
+      log('Scan complete.', 'ok');
+    } catch(e){
+      log('Scan aborted: ' + esc(e.message), 'err');
+      resultsEl.innerHTML = '<div class="note errbox">Scan stopped: ' + esc(e.message) + '</div>';
+    }
+    runBtn.disabled = false;
+    copyBtn.disabled = !evidence.scanned_at;
+  });
+
+  function renderResults(){
+    let h = '<table>';
+    h += '<tr><th>Field</th><th>Value</th></tr>';
+    h += '<tr><td>VIN</td><td class="kpi">' + esc(evidence.vin || 'not decoded') + '</td></tr>';
+    h += '<tr><td>Protocol</td><td>' + esc(evidence.protocol || '—') + '</td></tr>';
+    h += '<tr><td>Battery</td><td>' + (evidence.battery_v != null ? evidence.battery_v + ' V' : '—') + '</td></tr>';
+    h += '<tr><td>DTCs</td><td>' + (evidence.dtcs.length
+      ? evidence.dtcs.map(d=>esc(d.code) + ' <span class="small">(' + d.status + ')</span>').join('<br/>')
+      : '<span class="small">none stored</span>') + '</td></tr>';
+    for(const name of Object.keys(evidence.pids)){
+      const p = evidence.pids[name];
+      h += '<tr><td>' + esc(name) + '</td><td class="kpi">' + p.value + ' <span class="small">' + esc(p.unit) + '</span></td></tr>';
+    }
+    h += '</table>';
+    resultsEl.innerHTML = h;
+    evPre.textContent = JSON.stringify(evidence, null, 2);
+  }
+
+  copyBtn.addEventListener('click', async ()=>{
+    const text = JSON.stringify(evidence);
+    try {
+      await navigator.clipboard.writeText(text);
+      log('Evidence JSON copied to clipboard.', 'ok');
+    } catch(e){
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); log('Evidence JSON copied to clipboard.', 'ok'); }
+      catch(e2){ log('Copy failed — select the JSON in section 4 manually.', 'err'); }
+      document.body.removeChild(ta);
+    }
+  });
+}
+
+if(typeof window !== 'undefined' && typeof document !== 'undefined'){
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPage);
+  else initPage();
+}
+</script>
+</body>
+</html>
