@@ -75,6 +75,49 @@ The ELM327 allowed-command set for the commodity path is therefore:
 `0902`, `03`, `07`, `0A`, `0202`, and `01xx` for allowlisted PIDs — plus the
 AT init sequence. Nothing else may be transmitted.
 
+## Stage A2 — dongle firmware on the simulator (done)
+
+The custom-dongle firmware path (`firmware/esp32/`) is validated with no
+hardware, against the CAN-frame-level ECU simulator instead of the ELM327
+text-protocol simulator:
+
+```bash
+python3 simulator/can_ecu_sim.py --self-test   # 9/9
+make -C firmware/esp32/tests check              # 55/55
+```
+
+What it covers: the real `obd_client.c` (the file that ships on the
+ESP32) does multi-frame VIN with ISO-TP flow control, confirmed/pending/
+permanent DTC decode per SAE J2012 on two canned vehicles (Escape P0171;
+Camry P0420 with non-empty pending P0133 + permanent P0420), 15 live PIDs
+against exact canned values, graceful skip on ECU silence, and a
+**wire audit** proving the client transmitted nothing but allowlisted
+services (`01/03/07/09/0A` to `0x7DF`) and flow-control frames. A
+non-allowlisted PID is refused with zero frames transmitted.
+
+**Pass criteria (Stage A2):** both commands green. (Both are: 24 Sept 2026.)
+
+## Stage B2 — dongle firmware on the bench
+
+Hardware: the bench build from `hardware/build-guide.html` (ESP32 +
+transceiver, GPIO21 TX / GPIO22 RX, 500 kbit/s) plus either a bench ECU
+simulator that answers 0902/03/07/0A/01 on CAN or a real parked vehicle.
+
+Procedure:
+1. Flash `firmware/esp32` (`pio run -t upload`); confirm `Glovebox-OBD`
+   advertises and the Nordic UART service is present.
+2. `full_scan` over BLE → VIN matches the door jamb; DTC lists match a
+   reference scan tool, including the empty case.
+3. Live PIDs sane (coolant within ambient..105 °C, RPM 0 at rest).
+4. Pull the transceiver's CANH/CANL mid-scan → client times out cleanly,
+   reconnects on the next request (no wedge).
+5. Negative check: capture the CAN traffic and confirm **no frame outside
+   `0x7DF` requests with services 01/03/07/09/0A and flow control to
+   `0x7E0`..`0x7E7` was ever transmitted** — the read-only rule on the
+   wire, not just in code review.
+
+**Pass criteria (Stage B2):** all 5 steps pass on the bench rig.
+
 ## Stage C — 5-vehicle checklist (M1 release criterion)
 
 Repeat Stage B steps 2–5 on five vehicles spanning: two makes (e.g. Ford +
