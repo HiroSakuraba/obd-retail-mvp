@@ -1,0 +1,185 @@
+{
+  "dtcs": [
+    "P0300",
+    "P0301",
+    "P0302",
+    "P0303",
+    "P0304",
+    "P0305",
+    "P0306",
+    "P0307",
+    "P0308"
+  ],
+  "explanation": "The ECU detected combustion events that were weak or absent. A misfire code names the cylinder that misfired, not the part that caused it.",
+  "family": "P030X_MISFIRE",
+  "initial_hypotheses": [
+    {
+      "id": "ignition_coil",
+      "label": "Ignition coil fault",
+      "prior": 0.3
+    },
+    {
+      "id": "spark_plug",
+      "label": "Worn or fouled spark plug",
+      "prior": 0.25
+    },
+    {
+      "id": "fuel_injector",
+      "label": "Fuel injector fault",
+      "prior": 0.15
+    },
+    {
+      "id": "vacuum_leak",
+      "label": "Vacuum / intake leak",
+      "prior": 0.1
+    },
+    {
+      "id": "compression",
+      "label": "Low compression (valves, rings, head gasket)",
+      "prior": 0.08
+    },
+    {
+      "id": "other",
+      "label": "Other / not yet isolated",
+      "prior": 0.12
+    }
+  ],
+  "repairs": [
+    {
+      "consumables": [
+        "Dielectric grease"
+      ],
+      "guide_id": "guide:coil-replace-generic",
+      "hypothesis": "ignition_coil",
+      "label": "Replace ignition coil on the misfiring cylinder",
+      "min_confidence": "moderate",
+      "parts": [
+        {
+          "qty": 1,
+          "required": true,
+          "sku": "COIL-XYZ"
+        }
+      ],
+      "tools": [
+        {
+          "mode": "own_or_buy",
+          "name": "8 mm socket"
+        },
+        {
+          "mode": "own_or_buy",
+          "name": "Spark plug socket"
+        }
+      ],
+      "video_id": "video:coil-replace",
+      "repair_id": "coil-replace"
+    },
+    {
+      "consumables": [
+        "Anti-seize (sparingly)"
+      ],
+      "guide_id": "guide:plug-replace-generic",
+      "hypothesis": "spark_plug",
+      "label": "Replace spark plugs",
+      "min_confidence": "moderate",
+      "parts": [
+        {
+          "qty": 4,
+          "required": true,
+          "sku": "PLUG-IRIDIUM"
+        }
+      ],
+      "tools": [
+        {
+          "mode": "own_or_buy",
+          "name": "Spark plug socket"
+        },
+        {
+          "mode": "loan_or_buy",
+          "name": "Torque wrench"
+        }
+      ],
+      "video_id": "video:plug-replace",
+      "repair_id": "plug-replace"
+    },
+    {
+      "consumables": [],
+      "guide_id": "guide:injector-service",
+      "hypothesis": "fuel_injector",
+      "label": "Injector diagnosis / replacement",
+      "min_confidence": "strong",
+      "parts": [
+        {
+          "qty": 1,
+          "required": false,
+          "sku": "INJ-GENERIC"
+        }
+      ],
+      "tools": [
+        {
+          "mode": "loan_or_buy",
+          "name": "Fuel pressure gauge"
+        }
+      ],
+      "video_id": "video:injector-service",
+      "repair_id": "injector-diagnose"
+    }
+  ],
+  "safety": {
+    "stop_if": [
+      "flashing_mil",
+      "severe_misfire",
+      "fuel_leak",
+      "overheat"
+    ],
+    "stop_message": "A flashing check-engine light means catalyst-damaging misfire: stop driving and seek professional service."
+  },
+  "tests": [
+    {
+      "id": "mode06_misfire_counts",
+      "kind": "obd_live",
+      "question": "Read per-cylinder misfire counts (Mode 06). Which cylinder dominates?",
+      "reads": [
+        "MISFIRE_CYL1",
+        "MISFIRE_CYL2",
+        "MISFIRE_CYL3",
+        "MISFIRE_CYL4"
+      ],
+      "result_rules": [
+        {
+          "updates": {
+            "fuel_injector": 0.8,
+            "ignition_coil": 1.6,
+            "spark_plug": 1.5,
+            "vacuum_leak": 0.6
+          },
+          "when": "dominant_share >= 0.7"
+        },
+        {
+          "updates": {
+            "ignition_coil": 0.6,
+            "spark_plug": 0.6,
+            "vacuum_leak": 2.2
+          },
+          "when": "dominant_share < 0.4"
+        }
+      ]
+    },
+    {
+      "id": "coil_swap",
+      "kind": "guided_manual",
+      "question": "Swap the coil from the misfiring cylinder to a healthy one, clear codes, drive, and rescan. Did the misfire follow the coil to the new cylinder?",
+      "updates_if_yes": {
+        "ignition_coil": 4.0
+      }
+    },
+    {
+      "id": "plug_inspection",
+      "kind": "guided_visual",
+      "question": "Remove the plug from the misfiring cylinder. Is it fouled, oil-soaked, cracked, or is the gap far out of spec?",
+      "updates_if_yes": {
+        "spark_plug": 3.0
+      }
+    }
+  ],
+  "title": "Cylinder misfire detected"
+}

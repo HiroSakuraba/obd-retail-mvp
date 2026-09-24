@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Glovebox OBD — Interactive MVP Demo</title>
+<style>
+  :root{--bg:#0b0d12;--panel:#11151d;--text:#eef2f7;--muted:#9aa6b2;
+        --accent:#0ff1ce;--warn:#f3b25b;--danger:#ff6b6b;--line:#283141}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#090b0f,#0d1118 45%,#0b0d12);
+       color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:auto;padding:24px}
+  h1{font-size:clamp(1.6rem,4vw,2.6rem);letter-spacing:-.03em;margin:.2em 0}
+  .lede{color:#c9d3df;max-width:820px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .card{background:rgba(17,21,29,.94);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .span4{grid-column:span 4}.span6{grid-column:span 6}.span12{grid-column:span 12}
+  @media(max-width:800px){.span4,.span6{grid-column:span 12}}
+  .kpi{font-size:1.6rem;font-weight:800}.small{font-size:.86rem;color:var(--muted)}
+  button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;cursor:pointer;
+         background:var(--accent);color:#00130f;margin:4px 6px 4px 0}
+  button.secondary{background:#222b37;color:#e8eef5;border:1px solid #334052}
+  button.danger{background:#3a2025;color:#ffd9df;border:1px solid #65333c}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  .status{padding:12px;border-radius:12px;background:#0a0e14;border:1px solid #263243;
+          min-height:46px;margin:12px 0}
+  .bar{height:9px;background:#222a35;border-radius:999px;overflow:hidden}
+  .bar>span{display:block;height:100%;background:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:.93rem}
+  th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
+  .note{border-left:4px solid var(--accent);padding:10px 14px;background:#0e1518;
+        border-radius:8px;margin:14px 0;color:#dbe2ea}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Glovebox OBD — Interactive MVP Demo</h1>
+  <p class="lede">A mock of the product logic with no real vehicle. “Scan vehicle”
+  injects a VIN, a P0171, and live values; the diagnosis is deterministic —
+  posterior(h) ∝ prior(h) × likelihood multipliers from the evidence graph.</p>
+
+  <div class="grid">
+    <div class="span4 card"><div class="small">Vehicle</div>
+      <div id="vehicle" class="kpi">Not connected</div><div id="vin" class="small">VIN —</div></div>
+    <div class="span4 card"><div class="small">Diagnostic status</div>
+      <div id="diagStatus" class="kpi">Idle</div><div id="dtc" class="small">No DTC</div></div>
+    <div class="span4 card"><div class="small">Likely cause</div>
+      <div id="cause" class="kpi">—</div><div id="confidence" class="small">No evidence yet</div></div>
+  </div>
+
+  <div style="margin-top:12px">
+    <button id="scanBtn">Scan vehicle</button>
+    <button id="testBtn" class="secondary" disabled>Run next test</button>
+    <button id="repairBtn" class="secondary" disabled>Build repair basket</button>
+    <button id="resetBtn" class="danger">Reset</button>
+  </div>
+  <div id="status" class="status">Plug in the dongle and tap Scan vehicle.</div>
+
+  <div class="grid" style="margin-top:10px">
+    <div class="card span6"><h3>Evidence</h3><div id="evidence" class="small">None yet.</div></div>
+    <div class="card span6"><h3>Hypotheses</h3><div id="hypotheses" class="small">None yet.</div></div>
+    <div class="card span12"><h3>Repair basket</h3><div id="basket" class="small">Not generated.</div></div>
+  </div>
+
+  <div class="note"><strong>Design rule:</strong> a DTC is evidence, not a parts
+  recommendation. Nothing below names a part until the evidence supports a cause —
+  and even then the basket is provisional until confirmed.</div>
+</div>
+
+<script>
+const PRIORS = {vacuumLeak:.32, mafBias:.24, fuelDelivery:.20, exhaustO2:.10, other:.14};
+const LABELS = {vacuumLeak:'Vacuum / intake leak', mafBias:'MAF bias or contamination',
+  fuelDelivery:'Fuel delivery issue', exhaustO2:'Exhaust leak / O₂ issue', other:'Other'};
+const state = {scanned:false, tested:false};
+
+const $ = id => document.getElementById(id);
+const pct = x => Math.round(x*100)+'%';
+const normalize = o => { const s=Object.values(o).reduce((a,b)=>a+b,0);
+  return Object.fromEntries(Object.entries(o).map(([k,v])=>[k,v/s])); };
+
+function renderHypotheses(h){
+  const sorted = Object.entries(h).sort((a,b)=>b[1]-a[1]);
+  $('hypotheses').innerHTML = sorted.map(([k,v]) =>
+    `<div style="margin:8px 0"><strong>${LABELS[k]}</strong> — ${pct(v)}` +
+    `<div class="bar"><span style="width:${(v*100).toFixed(1)}%"></span></div></div>`).join('');
+  return sorted[0];
+}
+
+function band(p){ return p>0.75?'Strong evidence':p>=0.45?'Moderate evidence':'Not enough evidence'; }
+
+function reset(){
+  state.scanned=false; state.tested=false;
+  $('vehicle').textContent='Not connected'; $('vin').textContent='VIN —';
+  $('diagStatus').textContent='Idle'; $('dtc').textContent='No DTC';
+  $('cause').textContent='—'; $('confidence').textContent='No evidence yet';
+  $('status').textContent='Plug in the dongle and tap Scan vehicle.';
+  $('evidence').textContent='None yet.'; $('hypotheses').textContent='None yet.';
+  $('basket').textContent='Not generated.';
+  $('testBtn').disabled=true; $('repairBtn').disabled=true;
+}
+
+$('scanBtn').onclick=()=>{
+  state.scanned=true;
+  $('vehicle').textContent='2018 Ford Escape 1.5L';
+  $('vin').textContent='VIN 1FMCU0GD… (demo)';
+  $('diagStatus').textContent='Needs diagnosis';
+  $('dtc').textContent='P0171 — System too lean, bank 1';
+  $('status').innerHTML='<strong>What the ECU detected:</strong> it is adding more ' +
+    'fuel than expected. This does not identify a failed part. Next: compare fuel ' +
+    'trim at idle with fuel trim at 2,500 RPM.';
+  $('evidence').innerHTML='Confirmed DTC: <strong>P0171</strong><br>' +
+    'LTFT at idle: <strong>+22%</strong><br>STFT at idle: <strong>+11%</strong><br>' +
+    'MAF: plausible but not conclusive<br>No severe misfire detected.';
+  renderHypotheses(normalize({...PRIORS}));
+  $('testBtn').disabled=false;
+};
+
+$('testBtn').onclick=()=>{
+  if(!state.scanned) return;
+  state.tested=true;
+  // Evidence: trims improve substantially at 2500 RPM (rule: trim_idle - trim_2500 >= 8).
+  const h={...PRIORS};
+  h.vacuumLeak*=2.2; h.mafBias*=0.75; h.fuelDelivery*=0.85; h.exhaustO2*=0.8;
+  const post=normalize(h);
+  const [top,p]=renderHypotheses(post);
+  $('cause').textContent=LABELS[top];
+  $('confidence').textContent=band(p)+' — '+pct(p);
+  $('diagStatus').textContent='Evidence updated';
+  $('evidence').innerHTML+='<br><strong>Test:</strong> at 2,500 RPM combined fuel trim ' +
+    'fell from +33% to +12%. That pattern raises the probability of an intake/vacuum leak.';
+  $('status').innerHTML='Next physical check: inspect the intake duct, PCV/vacuum hoses ' +
+    'and obvious leak points. A smoke test can confirm the leak before buying any part.';
+  $('repairBtn').disabled=false;
+};
+
+$('repairBtn').onclick=()=>{
+  if(!state.tested) return;
+  $('basket').innerHTML=
+    `<table>
+      <tr><th>Item</th><th>Why</th><th>MVP action</th></tr>
+      <tr><td>Vehicle-specific PCV / intake hose</td><td>Only after visual/smoke confirmation</td><td>View exact-fit part</td></tr>
+      <tr><td>Hose pliers</td><td>Clamp removal</td><td>Buy or loan</td></tr>
+      <tr><td>Smoke-test option</td><td>Confirms leak before replacing parts</td><td>Guide / shop referral</td></tr>
+      <tr><td>Repair video</td><td>Vehicle-specific replacement steps</td><td>Watch</td></tr>
+    </table>
+    <p><strong>Verification:</strong> rescan after repair, check short- and long-term ` +
+    `fuel trims, and watch for P0171 recurrence over several drive cycles.</p>`;
+  $('status').innerHTML='<strong>Basket generated (confidence: moderate).</strong> ' +
+    'In production the retailer adapter resolves VIN fitment, local inventory, price, ' +
+    'loaner tools, and pickup location.';
+};
+
+$('resetBtn').onclick=reset;
+reset();
+</script>
+</body>
+</html>

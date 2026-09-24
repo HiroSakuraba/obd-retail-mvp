@@ -1,0 +1,155 @@
+{
+  "dtcs": [
+    "P0128"
+  ],
+  "explanation": "The engine did not reach its expected operating temperature within the expected time. This is a warm-up rationality fault: the ECU watches coolant temperature rise against a model, not a single sensor reading.",
+  "family": "P0128_THERMOSTAT_RATIONALITY",
+  "initial_hypotheses": [
+    {
+      "id": "thermostat_stuck_open",
+      "label": "Thermostat stuck open",
+      "prior": 0.4
+    },
+    {
+      "id": "coolant_temp_sensor",
+      "label": "Coolant temperature sensor / circuit fault",
+      "prior": 0.2
+    },
+    {
+      "id": "low_coolant",
+      "label": "Low coolant level",
+      "prior": 0.15
+    },
+    {
+      "id": "other",
+      "label": "Other / not yet isolated",
+      "prior": 0.25
+    }
+  ],
+  "repairs": [
+    {
+      "consumables": [
+        "Engine coolant",
+        "Thermostat gasket"
+      ],
+      "guide_id": "guide:thermostat-replace-generic",
+      "hypothesis": "thermostat_stuck_open",
+      "label": "Replace thermostat and gasket",
+      "min_confidence": "moderate",
+      "parts": [
+        {
+          "qty": 1,
+          "required": true,
+          "sku": "THERM-192F"
+        }
+      ],
+      "tools": [
+        {
+          "mode": "own_or_buy",
+          "name": "Socket set"
+        },
+        {
+          "mode": "own_or_buy",
+          "name": "Drain pan"
+        }
+      ],
+      "video_id": "video:thermostat-replace",
+      "repair_id": "thermostat-replace"
+    },
+    {
+      "consumables": [],
+      "guide_id": "guide:ect-sensor-replace",
+      "hypothesis": "coolant_temp_sensor",
+      "label": "Replace coolant temperature sensor",
+      "min_confidence": "moderate",
+      "parts": [
+        {
+          "qty": 1,
+          "required": true,
+          "sku": "ECT-SENSOR"
+        }
+      ],
+      "tools": [
+        {
+          "mode": "own_or_buy",
+          "name": "Deep socket"
+        }
+      ],
+      "video_id": "video:ect-replace",
+      "repair_id": "ect-sensor-replace"
+    },
+    {
+      "consumables": [
+        "Engine coolant"
+      ],
+      "guide_id": "guide:coolant-topup",
+      "hypothesis": "low_coolant",
+      "label": "Top up coolant and inspect for leaks",
+      "min_confidence": "moderate",
+      "parts": [
+        {
+          "qty": 1,
+          "required": false,
+          "sku": "COOLANT-5050"
+        }
+      ],
+      "tools": [],
+      "video_id": "video:coolant-topup",
+      "repair_id": "coolant-topup-inspect"
+    }
+  ],
+  "safety": {
+    "stop_if": [
+      "overheat",
+      "low_oil_pressure",
+      "coolant_leak_severe"
+    ],
+    "stop_message": "Overheating or severe coolant loss: stop the engine and seek professional service."
+  },
+  "tests": [
+    {
+      "id": "warmup_curve",
+      "kind": "obd_live",
+      "question": "From a cold start, log coolant temperature (PID 05) over the first 10 minutes of driving. What does the curve show?",
+      "reads": [
+        "ECT_C",
+        "RPM",
+        "ELAPSED_S"
+      ],
+      "result_rules": [
+        {
+          "updates": {
+            "coolant_temp_sensor": 0.6,
+            "low_coolant": 0.8,
+            "thermostat_stuck_open": 2.5
+          },
+          "when": "ect_after_10min_c < 70"
+        },
+        {
+          "updates": {
+            "coolant_temp_sensor": 3.0,
+            "thermostat_stuck_open": 0.5
+          },
+          "when": "ect_after_10min_c >= 70 and ect_rise_c < 3"
+        },
+        {
+          "updates": {
+            "low_coolant": 2.0,
+            "thermostat_stuck_open": 0.7
+          },
+          "when": "ect_after_10min_c >= 70 and ect_rise_c >= 3 and ect_fluctuates == 1"
+        }
+      ]
+    },
+    {
+      "id": "coolant_level_check",
+      "kind": "guided_visual",
+      "question": "With the engine cold, is the coolant level in the reservoir clearly below the MIN mark, or are there visible leaks?",
+      "updates_if_yes": {
+        "low_coolant": 3.0,
+        "thermostat_stuck_open": 0.8
+      }
+    }
+  ],
+  "title": "Coolant temperature below thermostat regulating temperature"
+}
