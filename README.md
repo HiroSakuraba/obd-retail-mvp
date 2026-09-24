@@ -40,10 +40,16 @@ obd-retail-mvp/
 ├── android/             Kotlin skeletons (pure Kotlin, no Android SDK deps):
 │                        scan session, BLE client contract, OBD repository,
 │                        local diagnostic engine
+│   └── elm/            ELM327 adapter path: AT protocol parsers
+│                       (Elm327Protocol.kt), BLE session (Elm327BleTransport.kt),
+│                       GATT wiring notes — talks to real cars via a
+│                       commodity BLE OBD adapter
 ├── backend/             FastAPI reference implementation + pytest suite
-├── simulator/           stdlib-only vehicle simulator speaking the JSON BLE
-│                        protocol over stdio + canned vehicles
-├── docs/                threat model, privacy model, hardware BOM
+├── simulator/           stdlib-only vehicle simulators:
+│   ├── obd_sim.py       JSON BLE protocol over stdio + canned vehicles
+│   └── elm327_sim.py    ELM327 AT protocol over TCP (bench-tests the elm/ client)
+├── docs/                threat model, privacy model, hardware BOM,
+│                        M1 bench test plan
 └── demo/                Standalone interactive browser demo (open index.html)
 ```
 
@@ -73,9 +79,21 @@ printf '%s\n' '{"v":1,"id":"a","op":"read_dtcs_confirmed"}' \
   | python3 simulator/obd_sim.py simulator/canned-vehicles/escape-2018-p0171.json
 ```
 
+**Run the ELM327 bench simulator** (no hardware needed — exercises the real-car path):
+
+```bash
+python3 simulator/elm327_sim.py --self-test   # 44 scripted checks passed
+.venv/bin/python -m pytest tests/ -q          # 28 parser vectors passed
+```
+
+**Bench-test the adapter path** — see `docs/bench-test-plan.md` (M1 stages A–C).
+
 ## Status
 
-M0 (browser prototype) scaffolding. The diagnostic graphs, scoring engine, BLE
+M0 (browser prototype) scaffolding, plus the M1 real-car path: the `elm/`
+Kotlin client speaks the ELM327 AT protocol to commodity BLE OBD adapters
+(Veepeak-class), with a TCP simulator and parser vectors standing in for
+kotlinc until the Android build exists. The diagnostic graphs, scoring engine, BLE
 protocol, and allowlist are real and tested; the Android BLE implementation,
 retailer catalog adapters, and production hardware are future milestones.
 See `docs/` for the threat model, privacy model, and BOM with certification
