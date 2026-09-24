@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Glovebox OBD — Virtual Car / ELM327 Bench Simulator</title>
+<style>
+  :root{--bg:#0b0d12;--panel:#11151d;--text:#eef2f7;--muted:#9aa6b2;
+        --accent:#0ff1ce;--warn:#f3b25b;--danger:#ff6b6b;--line:#283141}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#090b0f,#0d1118 45%,#0b0d12);
+       color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:auto;padding:24px}
+  h1{font-size:clamp(1.5rem,4vw,2.4rem);letter-spacing:-.03em;margin:.2em 0}
+  h2{font-size:1.25rem;margin:.2em 0 .6em}
+  .lede{color:#c9d3df;max-width:900px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .card{background:rgba(17,21,29,.94);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .span3{grid-column:span 3}.span4{grid-column:span 4}.span5{grid-column:span 5}
+  .span6{grid-column:span 6}.span7{grid-column:span 7}.span8{grid-column:span 8}.span12{grid-column:span 12}
+  @media(max-width:900px){.span3,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}}
+  .kpi{font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .small{font-size:.86rem;color:var(--muted)}
+  .pidgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:600px){.pidgrid{grid-template-columns:repeat(2,1fr)}}
+  .pid{background:#0a0e14;border:1px solid #263243;border-radius:10px;padding:8px 10px}
+  .pid .v{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .pid .u{font-size:.75rem;color:var(--muted)}
+  button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;cursor:pointer;
+         background:var(--accent);color:#00130f;margin:4px 6px 4px 0}
+  button.secondary{background:#222b37;color:#e8eef5;border:1px solid #334052}
+  button.danger{background:#3a2025;color:#ffd9df;border:1px solid #65333c}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  select{background:#0e1218;color:#e8eef5;border:1px solid #334052;border-radius:10px;
+         padding:10px 12px;font-size:.95rem;margin:4px 6px 4px 0;max-width:100%}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  input[type=text]{background:#0a0e14;color:#e8eef5;border:1px solid #334052;border-radius:10px;
+         padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.95rem;width:100%}
+  .term{background:#05070b;border:1px solid #263243;border-radius:12px;padding:12px;
+        font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem;line-height:1.55;
+        height:340px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+  .term .echo{color:#8fa3b8}.term .cmd{color:var(--accent)}
+  .status{padding:12px;border-radius:12px;background:#0a0e14;border:1px solid #263243;
+          min-height:46px;margin:12px 0}
+  .note{border-left:4px solid var(--accent);padding:10px 14px;background:#0e1518;
+        border-radius:8px;margin:14px 0;color:#dbe2ea}
+  .warnbox{border-left-color:var(--warn);background:#18140d}
+  table{width:100%;border-collapse:collapse;font-size:.93rem}
+  th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
+  .toggle{display:inline-flex;align-items:center;gap:8px;margin:6px 12px 6px 0}
+  .toggle input{width:18px;height:18px;accent-color:var(--accent)}
+  .footer{margin:50px 0 30px;color:#778493;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Virtual Car &amp; ELM327 Bench Simulator</h1>
+  <p class="lede">A software car for bench-testing the app with no hardware.
+  Pick a vehicle, watch live PIDs tick, type raw ELM327 commands in the terminal,
+  or run the same scan sequence the app will use. Everything is simulated
+  in-page — no server, no dependencies.</p>
+
+  <div class="grid">
+    <div class="card span4">
+      <h2>1 · Vehicle</h2>
+      <label class="small" for="vehSel">Vehicle on the lift:</label><br/>
+      <select id="vehSel"></select>
+      <div class="small" id="vehInfo" style="margin-top:8px"></div>
+      <div style="margin-top:10px">
+        <label class="toggle"><input type="checkbox" id="engineOn" checked/> Engine on</label>
+      </div>
+      <div style="margin-top:6px">
+        <label class="small" for="rpmSlider">Target RPM: <span id="rpmVal">850</span></label>
+        <input type="range" id="rpmSlider" min="750" max="3000" step="50" value="850"/>
+        <div class="small">Rev to 2,500 and watch fuel trims — that is the real P0171 diagnostic test.</div>
+      </div>
+    </div>
+
+    <div class="card span8">
+      <h2>2 · Live PID dashboard <span class="small">(ticks 2×/sec)</span></h2>
+      <div class="pidgrid" id="pidGrid"></div>
+      <div class="small" id="pidNote" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card span7">
+      <h2>3 · ELM327 terminal</h2>
+      <div class="term" id="term"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="text" id="cmdInput" placeholder="Type an ELM327 command, e.g. 010C" autocomplete="off" spellcheck="false"/>
+        <button id="sendBtn" class="secondary">Send</button>
+      </div>
+      <div class="small" style="margin-top:6px">Try: <code>ATZ</code> · <code>0902</code> · <code>03</code> · <code>010C</code> · <code>0202</code> · <code>ATDP</code> · <code>ATHV</code></div>
+    </div>
+
+    <div class="card span5">
+      <h2>4 · Scripted app scan</h2>
+      <p class="small">Runs the exact sequence the Android app will use —
+      init, VIN, DTCs, then the PIDs each diagnostic graph needs — with 150&nbsp;ms
+      between commands.</p>
+      <button id="scanBtn">Run scan like the app</button>
+      <div id="scanOut" class="small" style="margin-top:10px">No scan run yet.</div>
+    </div>
+  </div>
+
+  <div class="note warnbox"><strong>Bench note:</strong> the P0442 (EVAP leak) vehicle
+  shows <em>nothing</em> unusual in live PIDs — that is realistic. EVAP leaks are
+  invisible to live data; they are found by the gas-cap check and a smoke test,
+  which is why the p0442 graph leans on guided tests.</div>
+
+  <div class="footer">Bench simulator for the Glovebox OBD retail MVP.
+  ELM327 command set mirrors <code>simulator/elm327_sim.py</code>; PID math follows SAE J1979, DTC encoding SAE J2012.</div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   PURE CORE — no DOM access. Safe to unit-test under node.
+   Single source of truth for PID encode/decode, DTC encode/decode,
+   vehicle physics, and the ELM327 command responder.
+   ===================================================================== */
+
+function hex2(n){ n = Math.max(0, Math.min(255, Math.round(n))); return n.toString(16).toUpperCase().padStart(2,'0'); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---- SAE J1979 PID definitions: encode physical -> data bytes, decode back.
+   live(st) returns the current physical value from vehicle state. ---- */
+const PIDS = {
+  0x04:{name:'Engine load', unit:'%',  enc:v=>[Math.round(clamp(v,0,100)*255/100)],            dec:b=>b[0]*100/255,            live:st=>st.load},
+  0x05:{name:'Coolant temp',unit:'°C', enc:v=>[Math.round(clamp(v,-40,215)+40)],                dec:b=>b[0]-40,                 live:st=>st.coolant},
+  0x06:{name:'STFT bank 1',unit:'%',  enc:v=>[Math.round(clamp(v,-100,99.2)*128/100+128)],     dec:b=>(b[0]-128)*100/128,      live:st=>st.stft},
+  0x07:{name:'LTFT bank 1',unit:'%',  enc:v=>[Math.round(clamp(v,-100,99.2)*128/100+128)],     dec:b=>(b[0]-128)*100/128,      live:st=>st.ltft},
+  0x0B:{name:'MAP',        unit:'kPa',enc:v=>[Math.round(clamp(v,0,255))],                     dec:b=>b[0],                    live:st=>st.map},
+  0x0C:{name:'RPM',        unit:'rpm',enc:v=>{const r=Math.round(clamp(v,0,16383.75)*4);return [r>>8, r&255];}, dec:b=>((b[0]*256)+b[1])/4, live:st=>st.rpm},
+  0x0D:{name:'Speed',      unit:'km/h',enc:v=>[Math.round(clamp(v,0,255))],                    dec:b=>b[0],                    live:st=>0},
+  0x0E:{name:'Timing adv.',unit:'°',  enc:v=>[Math.round((clamp(v,-64,63.5)+64)*2)],            dec:b=>b[0]/2-64,               live:st=>12+st.load*0.15},
+  0x10:{name:'MAF',        unit:'g/s',enc:v=>{const r=Math.round(clamp(v,0,655.35)*100);return [r>>8, r&255];}, dec:b=>((b[0]*256)+b[1])/100, live:st=>st.maf},
+  0x11:{name:'Throttle',   unit:'%',  enc:v=>[Math.round(clamp(v,0,100)*255/100)],             dec:b=>b[0]*100/255,            live:st=>st.throttle},
+  0x14:{name:'O2 B1S1',    unit:'V',  enc:v=>[Math.round(clamp(v,0,1.275)/0.005), 0xFF],       dec:b=>b[0]*0.005,              live:st=>st.o2up},
+  0x15:{name:'O2 B1S2',    unit:'V',  enc:v=>[Math.round(clamp(v,0,1.275)/0.005), 0xFF],       dec:b=>b[0]*0.005,              live:st=>st.o2down},
+  0x1F:{name:'Run time',   unit:'s',  enc:v=>{const r=Math.round(clamp(v,0,65535));return [r>>8, r&255];}, dec:b=>(b[0]*256)+b[1], live:st=>st.runtime},
+  0x21:{name:'Dist w/ MIL',unit:'km', enc:v=>{const r=Math.round(clamp(v,0,65535));return [r>>8, r&255];}, dec:b=>(b[0]*256)+b[1], live:st=>st.dtcs.length?120:0},
+  0x33:{name:'Baro',       unit:'kPa',enc:v=>[Math.round(clamp(v,0,255))],                     dec:b=>b[0],                    live:st=>101},
+};
+function encodePid(pid, value){ const d=PIDS[pid]; if(!d) return null; return d.enc(value); }
+function decodePid(pid, bytes){ const d=PIDS[pid]; if(!d) return null; return d.dec(bytes); }
+/* PID support bitmaps (services 0100/0120), computed from PIDS — no drift. */
+function pidBitmap(base){
+  const out=[0,0,0,0];
+  for(let pid=base+1; pid<=base+32; pid++){
+    if(PIDS[pid]){ const i=Math.floor((pid-base-1)/8); out[i] |= (1 << (7-((pid-base-1)%8))); }
+  }
+  return out;
+}
+
+/* ---- SAE J2012 DTC encode/decode ---- */
+const DTC_LETTERS=['P','C','B','U'];
+function dtcToBytes(code){
+  const m=/^([PCBU])(\d)(\d)([0-9A-Fa-f]{2})$/.exec(code);
+  if(!m) return null;
+  const type=DTC_LETTERS.indexOf(m[1]);
+  const b1=(type<<6)|((+m[2])<<4)|(+m[3]);
+  const b2=parseInt(m[4],16);
+  return [b1,b2];
+}
+function dtcFromBytes(b1,b2){
+  return DTC_LETTERS[(b1>>6)&3] + ((b1>>4)&3) + (b1&15).toString(16).toUpperCase()
+       + b2.toString(16).toUpperCase().padStart(2,'0');
+}
+
+/* ---- Vehicles ---- */
+const VEHICLES=[
+  {id:'healthy', name:'Healthy 2018 Ford Escape 1.5L', vin:'1FMCU0GD0JUA12345', dtcs:[],
+   note:'No faults. Baseline for comparison.'},
+  {id:'p0171', name:'2018 Ford Escape 1.5L — P0171', vin:'1FMCU0GD2JUA54321', dtcs:['P0171'],
+   note:'System too lean, bank 1. LTFT runs +18–25% at idle and falls as you rev — try the RPM slider at 2,500.'},
+  {id:'p0302', name:'2016 Honda Civic 2.0L — P0302', vin:'2HGFC2F59GH512340', dtcs:['P0302'],
+   note:'Cylinder 2 misfire. Watch RPM jitter and the misfire counter climb.'},
+  {id:'p0128', name:'2015 Toyota Camry 2.5L — P0128', vin:'4T4BF1FK5FR812345', dtcs:['P0128'],
+   note:'Thermostat stuck open. Coolant warms slowly and plateaus around 70 °C.'},
+  {id:'p0420', name:'2017 Subaru Outback 2.5L — P0420', vin:'4S4BSANC5H3123456', dtcs:['P0420'],
+   note:'Catalyst efficiency below threshold. Downstream O₂ mirrors the upstream switching instead of staying steady.'},
+  {id:'p0442', name:'2019 Chevrolet Equinox 1.5L — P0442', vin:'2GNAXKEV5K6123456', dtcs:['P0442'],
+   note:'EVAP small leak. Deliberately invisible in live PIDs — diagnose via gas-cap check and smoke test.'},
+  {id:'p0133', name:'2014 Mazda 3 2.0L — P0133', vin:'JM1BM1M75E1123456', dtcs:['P0133'],
+   note:'Upstream O₂ slow response. The upstream trace switches sluggishly (~8 s period vs ~1.5 s healthy).'},
+];
+const GRAPH_FOR_DTC={P0171:'p0171.json',P0302:'p030x.json',P0128:'p0128.json',
+                     P0420:'p0420.json',P0442:'p0442.json',P0133:'p0133.json'};
+
+function makeState(vehId){
+  const v=VEHICLES.find(x=>x.id===vehId)||VEHICLES[0];
+  const st={veh:v, engineOn:true, rpm:0, rpmTarget:850, throttle:0, load:0,
+    coolant:22, stft:0, ltft:0, maf:0, map:0, o2up:0.5, o2down:0.7,
+    o2t:0, runtime:0, misfires:0, dtcs:v.dtcs.slice(), freeze:null};
+  // freeze frame: snapshot of conditions when the DTC set
+  if(v.dtcs.length){
+    st.freeze={dtc:v.dtcs[0], coolant:88, rpm:2120, stft:9, ltft:21, maf:16.2};
+  }
+  return st;
+}
+function tick(st){
+  if(!st.engineOn){ st.rpm=Math.max(0,st.rpm-400); st.o2up=0.45; st.o2down=0.45; return; }
+  st.runtime+=0.5; st.o2t+=0.5;
+  const id=st.veh.id;
+  // RPM chases the slider target
+  const jitter = id==='p0302' ? 42 : 8;
+  st.rpm += (st.rpmTarget-st.rpm)*0.25 + (Math.random()-0.5)*jitter;
+  if(id==='p0302' && Math.random()<0.06) st.rpm-=120;      // misfire stumble
+  st.rpm=Math.max(0,st.rpm);
+  st.throttle=clamp(10+(st.rpm-750)/2250*70,0,100);
+  st.load=clamp(16+st.throttle*0.55+(Math.random()-0.5)*3,0,100);
+  st.maf=Math.max(0, 2.0+(st.rpm/1000)*3.6*(0.6+st.load/100)+(Math.random()-0.5)*0.4);
+  st.map=clamp(28+st.throttle*0.75,0,255);
+  // coolant: slow warm-up; P0128 plateaus at ~70
+  const target=id==='p0128'?70:91;
+  if(st.coolant<target) st.coolant=Math.min(target, st.coolant+(id==='p0128'?0.25:0.9));
+  st.coolant+= (Math.random()-0.5)*0.2;
+  // fuel trims
+  if(id==='p0171'){
+    st.ltft=22*Math.pow(750/Math.max(st.rpm,750),0.8)+(Math.random()-0.5)*1.5;
+    st.stft=(6-st.ltft)*0.35+(Math.random()-0.5)*3;
+  }else{
+    st.ltft=1.5+(Math.random()-0.5)*2;
+    st.stft=(Math.random()-0.5)*4;
+  }
+  // O2 sensors
+  const period=id==='p0133'?8:1.5;
+  const up=0.5+0.38*Math.sin(2*Math.PI*st.o2t/period);
+  st.o2up=clamp(up+(Math.random()-0.5)*0.05,0.1,0.9);
+  if(id==='p0420') st.o2down=clamp(0.5+0.32*Math.sin(2*Math.PI*st.o2t/period-0.6),0.1,0.9);
+  else st.o2down=clamp(0.70+(Math.random()-0.5)*0.04,0.6,0.8);
+  if(id==='p0302' && Math.random()<0.35) st.misfires+=1+Math.floor(Math.random()*4);
+}
+
+/* ---- ELM327 responder: pure function of (command, sim).
+   sim = {st, echo, headers, spaces}. Returns the full reply text
+   WITHOUT echo (caller adds echo) and WITHOUT trailing '>' (caller adds it),
+   lines separated by '\r'. ---- */
+function vinFrameLines(vin){
+  const data=[0x49,0x02,0x01].concat(vin.split('').map(c=>c.charCodeAt(0)));
+  const lines=[]; let n=0;
+  for(let i=0;i<data.length;i+=7){
+    lines.push(n+': '+data.slice(i,i+7).map(hex2).join(' ')); n++;
+  }
+  return lines;
+}
+function respondTo(rawCmd, sim){
+  const cmd=rawCmd.trim().toUpperCase().replace(/\s+/g,'');
+  const st=sim.st;
+  if(cmd==='ATZ') return 'ELM327 v1.5';
+  if(cmd==='ATE0'){ sim.echo=false; return 'OK'; }
+  if(cmd==='ATE1'){ sim.echo=true;  return 'OK'; }
+  if(cmd==='ATL0'){ sim.linefeed=false; return 'OK'; }
+  if(cmd==='ATL1'){ sim.linefeed=true;  return 'OK'; }
+  if(cmd==='ATS0'){ sim.spaces=false; return 'OK'; }
+  if(cmd==='ATS1'){ sim.spaces=true;  return 'OK'; }
+  if(cmd==='ATH0'){ sim.headers=false; return 'OK'; }
+  if(cmd==='ATH1'){ sim.headers=true;  return 'OK'; }
+  if(cmd==='ATSP0'||cmd==='ATSP6'){ sim.protocol='6'; return 'OK'; }
+  if(cmd==='ATDP') return 'ISO 15765-4 (CAN 11/500)';
+  if(cmd==='ATHV') return '12.6V';
+  if(/^AT/.test(cmd)) return '?';
+  if(cmd==='0902'){
+    return vinFrameLines(st.veh.vin).join('\r');
+  }
+  if(cmd==='03'||cmd==='07'||cmd==='0A'){
+    if(!st.engineOn && cmd!=='03') return 'NO DATA';
+    const list = cmd==='03' ? st.dtcs : [];
+    if(!list.length) return cmd==='03' ? '43 00' : 'NO DATA';
+    const bytes=list.map(dtcToBytes).filter(Boolean);
+    return '43 '+bytes.map(b=>b.map(hex2).join(' ')).join(' ');
+  }
+  if(cmd==='0202'){
+    const f=st.freeze;
+    if(!f) return 'NO DATA';
+    const db=dtcToBytes(f.dtc);
+    const parts=['42','02','00',hex2(db[0]),hex2(db[1]),
+      '05',hex2(f.coolant+40),
+      '0C',...encodePid(0x0C,f.rpm).map(hex2),
+      '06',...encodePid(0x06,f.stft).map(hex2),
+      '07',...encodePid(0x07,f.ltft).map(hex2),
+      '10',...encodePid(0x10,f.maf).map(hex2)];
+    return parts.join(' ');
+  }
+  const m=/^01([0-9A-F]{2})$/.exec(cmd);
+  if(m){
+    const pid=parseInt(m[1],16);
+    if(pid===0x00) return '41 00 '+pidBitmap(0x00).map(hex2).join(' ');
+    if(pid===0x20) return '41 20 '+pidBitmap(0x20).map(hex2).join(' ');
+    const d=PIDS[pid];
+    if(!d) return 'NO DATA';
+    if(!st.engineOn) return 'NO DATA';
+    const bytes=encodePid(pid, d.live(st));
+    return '41 '+m[1]+' '+bytes.map(hex2).join(' ');
+  }
+  return '?';
+}
+
+/* =====================================================================
+   UI — only runs in a browser.
+   ===================================================================== */
+const DASH_PIDS=[
+  {pid:0x0C,label:'RPM'},{pid:0x05,label:'Coolant'},{pid:0x06,label:'STFT B1'},
+  {pid:0x07,label:'LTFT B1'},{pid:0x10,label:'MAF'},{pid:0x0B,label:'MAP'},
+  {pid:0x11,label:'Throttle'},{pid:0x14,label:'O₂ upstream'},{pid:0x15,label:'O₂ downstream'},
+];
+function fmtVal(pid,v){
+  const d=PIDS[pid];
+  if(pid===0x0C) return Math.round(v)+'';
+  if(pid===0x05) return v.toFixed(1);
+  if(pid===0x06||pid===0x07) return (v>=0?'+':'')+v.toFixed(1);
+  if(pid===0x14||pid===0x15) return v.toFixed(2);
+  return v.toFixed(1);
+}
+function initUI(){
+  const $=id=>document.getElementById(id);
+  const sim={st:makeState('healthy'), echo:true, headers:false, spaces:true, linefeed:true, protocol:'6'};
+  // vehicle picker
+  const sel=$('vehSel');
+  VEHICLES.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=v.name; sel.appendChild(o); });
+  function showVeh(){
+    const v=sim.st.veh;
+    $('vehInfo').innerHTML='<strong>VIN</strong> '+v.vin+'<br/><strong>DTCs</strong> '+
+      (v.dtcs.length?v.dtcs.join(', '):'<span style="color:var(--accent)">none</span>')+
+      '<br/>'+v.note;
+  }
+  sel.addEventListener('change',()=>{ sim.st=makeState(sel.value); showVeh(); termPrint('--- vehicle swapped: '+sim.st.veh.name+' ---'); });
+  showVeh();
+  // dashboard
+  const grid=$('pidGrid');
+  const cells=DASH_PIDS.map(d=>{
+    const div=document.createElement('div'); div.className='pid';
+    div.innerHTML='<div class="u">'+d.label+'</div><div class="v">—</div><div class="u">'+PIDS[d.pid].unit+'</div>';
+    grid.appendChild(div); return {pid:d.pid, el:div.querySelector('.v')};
+  });
+  const note=$('pidNote');
+  function renderDash(){
+    cells.forEach(c=>{
+      const v=PIDS[c.pid].live(sim.st);
+      c.el.textContent=sim.st.engineOn?fmtVal(c.pid,v):'—';
+    });
+    let extra='';
+    if(sim.st.veh.id==='p0302') extra='Misfire counter (Mode 06 style): <strong>'+sim.st.misfires+'</strong> events on cyl 2';
+    if(sim.st.veh.id==='p0442') extra='EVAP leak is invisible to live data — by design.';
+    note.innerHTML=extra;
+  }
+  // rpm slider + engine toggle
+  $('rpmSlider').addEventListener('input',e=>{ sim.st.rpmTarget=+e.target.value; $('rpmVal').textContent=e.target.value; });
+  $('engineOn').addEventListener('change',e=>{ sim.st.engineOn=e.target.checked; });
+  setInterval(()=>{ tick(sim.st); renderDash(); },500);
+  renderDash();
+  // terminal
+  const term=$('term'), input=$('cmdInput');
+  function termPrint(text, cls){
+    const div=document.createElement('div');
+    if(cls) div.className=cls;
+    div.textContent=text;
+    term.appendChild(div); term.scrollTop=term.scrollHeight;
+  }
+  function send(raw){
+    const cmd=raw.trim(); if(!cmd) return;
+    if(sim.echo) termPrint(cmd,'echo');
+    const reply=respondTo(cmd, sim);
+    reply.split('\r').forEach(line=>termPrint(line));
+    termPrint('>','cmd');
+  }
+  $('sendBtn').addEventListener('click',()=>{ send(input.value); input.value=''; input.focus(); });
+  input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ send(input.value); input.value=''; } });
+  termPrint('Glovebox virtual ELM327 — type ATZ to begin. Engine is ON.','echo');
+  termPrint('>','cmd');
+  // scripted scan
+  const SCAN_SEQ=['ATZ','ATE0','ATL0','ATS0','ATH1','ATSP0','0902','03','0105','010C','0106','0107','0110','0114','0115'];
+  $('scanBtn').addEventListener('click',()=>{
+    const btn=$('scanBtn'); btn.disabled=true;
+    let i=0;
+    termPrint('--- app scan started ---','echo');
+    (function step(){
+      if(i<SCAN_SEQ.length){
+        const c=SCAN_SEQ[i++];
+        if(sim.echo||c==='ATZ') termPrint(c,'echo');
+        const wasEcho=sim.echo;
+        if(c==='ATZ') sim.echo=true; // ATZ resets echo on real adapters
+        const reply=respondTo(c, sim);
+        reply.split('\r').forEach(line=>termPrint(line));
+        termPrint('>','cmd');
+        if(c==='ATZ') sim.echo=wasEcho;
+        setTimeout(step,150);
+      }else{
+        renderScanSummary(); btn.disabled=false;
+      }
+    })();
+  });
+  function renderScanSummary(){
+    const v=sim.st.veh;
+    const ev=[
+      ['Coolant', fmtVal(0x05,PIDS[0x05].live(sim.st))+' °C'],
+      ['RPM', fmtVal(0x0C,PIDS[0x0C].live(sim.st))+' rpm'],
+      ['LTFT B1', fmtVal(0x07,PIDS[0x07].live(sim.st))+' %'],
+      ['STFT B1', fmtVal(0x06,PIDS[0x06].live(sim.st))+' %'],
+      ['MAF', fmtVal(0x10,PIDS[0x10].live(sim.st))+' g/s'],
+      ['O₂ upstream', fmtVal(0x14,PIDS[0x14].live(sim.st))+' V'],
+      ['O₂ downstream', fmtVal(0x15,PIDS[0x15].live(sim.st))+' V'],
+    ];
+    const graphs=v.dtcs.map(d=>d+' → <code>'+(GRAPH_FOR_DTC[d]||'no graph yet')+'</code>').join('<br/>')||'no DTCs — no graph selected';
+    $('scanOut').innerHTML=
+      '<table><tr><th>Vehicle</th><td>'+v.name+'<br/><span class="small">'+v.vin+'</span></td></tr>'+
+      '<tr><th>DTCs</th><td>'+(v.dtcs.join(', ')||'none')+'</td></tr>'+
+      ev.map(e=>'<tr><th>'+e[0]+'</th><td>'+e[1]+'</td></tr>').join('')+
+      '<tr><th>Graph select</th><td>'+graphs+'</td></tr></table>';
+    termPrint('--- app scan complete: '+v.dtcs.length+' DTC(s) ---','echo');
+  }
+}
+if(typeof document!=='undefined') initUI();
+</script>
+</body>
+</html>
