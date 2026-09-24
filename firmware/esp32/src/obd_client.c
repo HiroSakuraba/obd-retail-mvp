@@ -6,8 +6,9 @@
  * (tcp_transport.c against simulator/can_ecu_sim.py).
  *
  * Transmit discipline (enforced here, not just documented):
- *  - requests go to the functional id 0x7DF and carry only allowlisted
- *    service bytes (01/03/07/09/0A) with allowlisted PIDs;
+ *  - requests go to the functional id of the negotiated CAN variant
+ *    (0x7DF for 11-bit, 0x18DB33F1 for 29-bit) and carry only allowlisted
+ *    service bytes (01/02/03/07/09/0A) with allowlisted PIDs;
  *  - the only other transmitted frames are ISO-TP Flow Control (0x30)
  *    addressed at the responding ECU's physical request id, which is
  *    transport-layer plumbing strictly necessary to receive a multi-frame
@@ -21,6 +22,44 @@
 
 #include "iso15765.h"
 #include "obd_allowlist.h"
+
+/* ---- variant id mapping -------------------------------------------- */
+
+typedef struct {
+    uint32_t func_id;
+    bool     func_extd;
+    uint32_t resp_base;
+    uint32_t resp_last;
+} obd_ids_t;
+
+static obd_ids_t obd_ids_for(can_variant_t v)
+{
+    obd_ids_t ids;
+    if (v == CAN_VAR_29B_500K || v == CAN_VAR_29B_250K) {
+        ids.func_id = CAN_ID_FUNC_REQUEST_29B;
+        ids.func_extd = true;
+        ids.resp_base = CAN_ID_RESP_BASE_29B;
+        ids.resp_last = CAN_ID_RESP_LAST_29B;
+    } else {
+        ids.func_id = CAN_ID_FUNC_REQUEST_11B;
+        ids.func_extd = false;
+        ids.resp_base = CAN_ID_RESP_BASE_11B;
+        ids.resp_last = CAN_ID_RESP_LAST_11B;
+    }
+    return ids;
+}
+
+/* Physical request id paired with a responding ECU, for ISO-TP flow
+   control: 0x7E8 -> 0x7E0 (11-bit); 0x18DAF1xx -> 0x18DAxxF1 (29-bit). */
+static uint32_t obd_phys_for(obd_ids_t ids, uint32_t responder, bool *extd)
+{
+    if (ids.func_extd) {
+        *extd = true;
+        return 0x18DA0000u | ((responder & 0xFFu) << 8) | 0xF1u;
+    }
+    *extd = false;
+    return CAN_ID_PHYS_REQUEST_11B + (responder - CAN_ID_RESP_BASE_11B);
+}
 
 /* ---- default scan PID list ---------------------------------------- */
 
@@ -39,9 +78,10 @@ const int OBD_DEFAULT_PIDS_LEN =
 
 /* ---- ISO-TP transact ----------------------------------------------- */
 
-/* Send an ISO-TP-encoded request to 0x7DF and collect the reassembled
- * response payload from the first ECU that answers on 0x7E8..0x7EF.
- * Returns payload length, OBDC_ERR_TIMEOUT, or OBDC_ERR_PROTOCOL. */
+/* Send an ISO-TP-encoded request to the variant's functional id and
+ * collect the reassembled response payload from the first ECU that
+ * answers on the variant's response range. Returns payload length,
+ * OBDC_ERR_TIMEOUT, or OBDC_ERR_PROTOCOL. */
 static int tp_transact(can_transport_t *t,
                        const uint8_t *req, size_t req_len,
                        uint8_t *resp, size_t resp_cap)
@@ -55,10 +95,13 @@ static int tp_transact(can_transport_t *t,
     size_t total = 0, got = 0;
     uint8_t expect_seq = 1;
     int rc;
+    obd_ids_t ids;
 
     if (!t || !req || req_len == 0 || req_len > 0xFFF || !resp ||
         resp_cap == 0)
         return OBDC_ERR_PROTOCOL;
+
+    ids = obd_ids_for(t->variant);
 
     nframes = isotp_encode(req, req_len, frames, ISOTP_MAX_FRAMES);
     if (nframes < 0)
@@ -66,7 +109,8 @@ static int tp_transact(can_transport_t *t,
 
     for (i = 0; i < nframes; i++) {
         can_frame_t tx;
-        tx.id = CAN_ID_FUNC_REQUEST;
+        tx.id = ids.func_id;
+        tx.extd = ids.func_extd;
         tx.dlc = 8;
         memcpy(tx.data, frames[i], 8);
         if (t->send(t, &tx) != 0)
@@ -84,7 +128,8 @@ static int tp_transact(can_transport_t *t,
             return OBDC_ERR_TIMEOUT;      /* transport error: fail closed */
         if (f.dlc == 0)
             continue;
-        if (f.id < CAN_ID_RESP_BASE || f.id > CAN_ID_RESP_LAST)
+        if (f.extd != ids.func_extd ||
+            f.id < ids.resp_base || f.id > ids.resp_last)
             continue;                    /* not an OBD response id */
         if (responder != 0 && f.id != responder)
             continue;                    /* first responder wins */
@@ -115,7 +160,7 @@ static int tp_transact(can_transport_t *t,
                     return OBDC_ERR_PROTOCOL;
                 /* Flow Control goes to the physical request id paired
                    with the responding ECU (0x7E8 -> 0x7E0, ...). */
-                fctx.id = CAN_ID_PHYS_REQUEST + (responder - CAN_ID_RESP_BASE);
+                fctx.id = obd_phys_for(ids, responder, &fctx.extd);
                 fctx.dlc = 8;
                 memcpy(fctx.data, fc, 8);
                 if (t->send(t, &fctx) != 0)
@@ -161,6 +206,7 @@ static int tp_transact(can_transport_t *t,
 static bool service_tx_allowed(uint8_t service)
 {
     return service == OBD_SVC_CURRENT_DATA ||
+           service == OBD_SVC_FREEZE_FRAME_DATA ||
            service == OBD_SVC_STORED_DTC ||
            service == OBD_SVC_PENDING_DTC ||
            service == OBD_SVC_VEHICLE_INFO ||
@@ -293,6 +339,33 @@ int obd_read_pid(can_transport_t *t, uint8_t pid, double *value_out)
     if (len < 2 || resp[0] != 0x41 || resp[1] != pid)
         return OBDC_ERR_PROTOCOL;
     return pid_decode(pid, resp + 2, (size_t)(len - 2), value_out);
+}
+
+/* ---- freeze frame (Mode 02) ---------------------------------------- */
+
+/* Read one frozen PID (service 02, frame 0): the snapshot the ECU stored
+   when the DTC was set. Same decode table as live PIDs; the PID allowlist
+   gate applies before any frame is transmitted. */
+int obd_read_freeze_frame(can_transport_t *t, uint8_t pid, double *value_out)
+{
+    char hex[3];
+    const uint8_t req[3] = { OBD_SVC_FREEZE_FRAME_DATA, pid, 0x00 };
+    uint8_t resp[TP_MAX_PAYLOAD];
+    int len;
+
+    if (!service_tx_allowed(req[0]))
+        return OBDC_ERR_FORBIDDEN;
+    snprintf(hex, sizeof hex, "%02X", pid);
+    if (!pid_allowlisted(hex))
+        return OBDC_ERR_FORBIDDEN;
+
+    len = tp_transact(t, req, sizeof req, resp, sizeof resp);
+    if (len < 0)
+        return len;                       /* timeout: ECU stayed silent */
+    /* Positive response: 42 <pid> <frame=00> <data...>. */
+    if (len < 3 || resp[0] != 0x42 || resp[1] != pid || resp[2] != 0x00)
+        return OBDC_ERR_PROTOCOL;
+    return pid_decode(pid, resp + 3, (size_t)(len - 3), value_out);
 }
 
 /* ---- full scan ------------------------------------------------------ */

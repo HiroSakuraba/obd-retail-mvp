@@ -134,3 +134,39 @@ int proto_build_error(const ble_request_t *req, const char *error_code,
         return -1;
     return 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* base64 (RFC 4648, no line breaks) for BLE chunking envelopes.      */
+
+static const char b64_table[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+size_t proto_b64_len(size_t inlen)
+{
+    /* 4 chars per 3 bytes, rounded up, plus NUL. */
+    return ((inlen + 2) / 3) * 4 + 1;
+}
+
+int proto_b64_encode(const uint8_t *in, size_t inlen,
+                     char *out, size_t outlen)
+{
+    size_t need, o = 0, i;
+
+    if (!in || !out || outlen == 0)
+        return -1;
+    need = proto_b64_len(inlen);
+    if (outlen < need)
+        return -1;
+    for (i = 0; i < inlen; i += 3) {
+        uint32_t n = (uint32_t)in[i] << 16;
+        size_t rem = inlen - i;
+        if (rem > 1) n |= (uint32_t)in[i + 1] << 8;
+        if (rem > 2) n |= in[i + 2];
+        out[o++] = b64_table[(n >> 18) & 0x3F];
+        out[o++] = b64_table[(n >> 12) & 0x3F];
+        out[o++] = (rem > 1) ? b64_table[(n >> 6) & 0x3F] : '=';
+        out[o++] = (rem > 2) ? b64_table[n & 0x3F] : '=';
+    }
+    out[o] = '\0';
+    return 0;
+}

@@ -13,9 +13,11 @@
 
 #ifdef ESP_PLATFORM
 
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_log.h"
+#include "ble_protocol.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
 #include "nimble/nimble_port.h"
@@ -42,6 +44,11 @@ static uint16_t g_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 /* Implemented in main_esp32.c: JSON request -> OBD dispatch. */
 void glovebox_on_ble_write(const uint8_t *in, size_t len);
 
+/* Defined below advertise(); forward-declared so advertise() can pass it
+   to ble_gap_adv_start. Without this, connection events never fire and
+   g_conn_handle stays NONE forever. */
+static int gap_event(struct ble_gap_event *event, void *arg);
+
 static int gatt_write_cb(uint16_t conn_handle, uint16_t attr_handle,
                          struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
@@ -52,19 +59,62 @@ static int gatt_write_cb(uint16_t conn_handle, uint16_t attr_handle,
     return 0;
 }
 
-void glovebox_ble_notify(const uint8_t *data, size_t len)
+/* Chunking (contract for the phone app, see firmware/esp32/README.md):
+ * replies of <= 180 bytes are notified as one raw JSON frame, exactly as
+ * before; larger replies are split into envelopes
+ *   {"v":1,"id":"<id>","chunk":<seq>,"chunks":<n>,"b64":"<base64>"}
+ * each carrying up to 120 raw bytes (160 base64 chars), so an envelope is
+ * at most ~215 bytes on the wire and the app must negotiate an ATT MTU
+ * of at least 218. The app concatenates the "b64" fields in order and
+ * base64-decodes once to recover the full JSON reply.
+ */
+#define CHUNK_RAW_MAX 120
+
+static void notify_one(const uint8_t *data, size_t len)
 {
     struct os_mbuf *om;
     int rc;
 
-    if (g_conn_handle == BLE_HS_CONN_HANDLE_NONE || !data || len == 0)
-        return;
     om = ble_hs_mbuf_from_flat(data, (uint16_t)len);
     if (!om)
         return;
     rc = ble_gatts_notify_custom(g_conn_handle, g_tx_handle, om);
     if (rc != 0)
         ESP_LOGW(TAG, "notify failed: %d", rc);
+}
+
+void glovebox_ble_notify(const char *req_id, const uint8_t *data, size_t len)
+{
+    size_t n, i;
+
+    if (!req_id || !req_id[0])
+        req_id = "unknown";
+    if (g_conn_handle == BLE_HS_CONN_HANDLE_NONE || !data || len == 0)
+        return;
+    if (len <= 180) {
+        notify_one(data, len);
+        return;
+    }
+    n = (len + CHUNK_RAW_MAX - 1) / CHUNK_RAW_MAX;
+    for (i = 0; i < n; i++) {
+        size_t off = i * CHUNK_RAW_MAX;
+        size_t clen = (len - off > CHUNK_RAW_MAX) ? CHUNK_RAW_MAX : len - off;
+        /* 120 raw bytes -> 160 base64 chars; envelope ~215 bytes max. */
+        char b64[164];
+        char env[256];
+        int w;
+
+        if (proto_b64_encode(data + off, clen, b64, sizeof b64) != 0)
+            return;
+        w = snprintf(env, sizeof env,
+                     "{\"v\":%u,\"id\":\"%s\",\"chunk\":%u,"
+                     "\"chunks\":%u,\"b64\":\"%s\"}",
+                     BLE_PROTO_VERSION, req_id,
+                     (unsigned)i, (unsigned)n, b64);
+        if (w < 0 || (size_t)w >= sizeof env)
+            return;
+        notify_one((const uint8_t *)env, (size_t)w);
+    }
 }
 
 static const struct ble_gatt_svc_def gatt_svcs[] = {
@@ -111,7 +161,7 @@ static void advertise(void)
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
     rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
-                           &adv_params, NULL, NULL);
+                           &adv_params, gap_event, NULL);
     if (rc != 0)
         ESP_LOGE(TAG, "adv_start %d", rc);
     else
@@ -169,9 +219,9 @@ void glovebox_ble_start(void)
 
 #else /* host stub */
 
-void glovebox_ble_notify(const uint8_t *data, size_t len)
+void glovebox_ble_notify(const char *req_id, const uint8_t *data, size_t len)
 {
-    (void)data; (void)len;
+    (void)req_id; (void)data; (void)len;
 }
 
 void glovebox_ble_start(void)

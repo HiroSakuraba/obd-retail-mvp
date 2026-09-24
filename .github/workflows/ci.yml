@@ -37,9 +37,30 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install gcc
         run: sudo apt-get update -q && sudo apt-get install -y -q gcc make
-      - name: Run firmware host tests
+      - name: Run firmware host tests (allowlist + BLE protocol)
         working-directory: firmware/tests
-        run: make test
+        run: make clean && make test
+      - name: Run ESP32 OBD client suite (vs CAN simulator)
+        working-directory: firmware/esp32/tests
+        run: make clean && make check
+      - name: Stub-compile ESP-IDF app sources
+        working-directory: firmware/esp32/tests
+        run: make check-app
+
+  platformio:
+    # Compiles the exact firmware binary that would ship on the ESP32-C3.
+    # The board needs no hardware here: `pio run` only builds.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build ESP32-C3 firmware
+        working-directory: firmware/esp32
+        run: pio run
 
   # NOTE: there is intentionally no Android-SDK job. The :app module
   # (Manifest, Compose UI, real BLE GATT) does not exist yet — see

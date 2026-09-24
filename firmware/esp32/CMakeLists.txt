@@ -1,0 +1,5 @@
+# ESP-IDF project file for the Glovebox dongle firmware.
+# Used by PlatformIO (framework = espidf); see platformio.ini.
+cmake_minimum_required(VERSION 3.16)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(glovebox)

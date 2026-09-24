@@ -113,8 +113,8 @@ footer{color:var(--muted);font-size:13px;margin-top:30px}
 <tr><th>ESP32 DevKit</th><th>CAN Pal</th><th>OBD breakout</th><th>Notes</th></tr>
 <tr><td>3V3</td><td>Vcc</td><td>—</td><td>CAN Pal logic supply</td></tr>
 <tr><td>GND</td><td>GND</td><td>pins 4 + 5</td><td>Common reference</td></tr>
-<tr><td>GPIO 21</td><td>TX</td><td>—</td><td>TWAI transmit</td></tr>
-<tr><td>GPIO 22</td><td>RX</td><td>—</td><td>TWAI receive</td></tr>
+<tr><td>GPIO 4</td><td>TX</td><td>—</td><td>TWAI transmit</td></tr>
+<tr><td>GPIO 5</td><td>RX</td><td>—</td><td>TWAI receive</td></tr>
 <tr><td>—</td><td>CANH</td><td>pin 6</td><td>CAN high</td></tr>
 <tr><td>—</td><td>CANL</td><td>pin 14</td><td>CAN low</td></tr>
 <tr><td>GND / low</td><td>SLNT</td><td>—</td><td>Normal transmit mode</td></tr>
@@ -123,7 +123,7 @@ footer{color:var(--muted);font-size:13px;margin-top:30px}
 
 <h3 class="sub">Assembly steps</h3>
 <label class="check"><input type="checkbox" data-gid="b-solder"><span class="lbl"><strong>Solder headers / terminal block.</strong> Solder the CAN Pal header and CANH/CANL/GND terminal block. Inspect for bridges.</span></label>
-<label class="check"><input type="checkbox" data-gid="b-logic"><span class="lbl"><strong>Wire logic only.</strong> Connect 3V3, GND, GPIO21→TX and GPIO22←RX. Do <em>not</em> connect the OBD plug yet.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-logic"><span class="lbl"><strong>Wire logic only.</strong> Connect 3V3, GND, GPIO4→TX and GPIO5←RX. Do <em>not</em> connect the OBD plug yet.</span></label>
 <label class="check"><input type="checkbox" data-gid="b-term"><span class="lbl"><strong>Disable CAN Pal termination.</strong> Move the onboard 120 Ω switch to OFF.</span></label>
 <label class="check"><input type="checkbox" data-gid="b-cont"><span class="lbl"><strong>Continuity test.</strong> With everything unpowered, verify no short between 3V3–GND, CANH–GND, CANL–GND, or CANH–CANL.</span></label>
 <label class="check"><input type="checkbox" data-gid="b-obd"><span class="lbl"><strong>Attach the OBD breakout.</strong> CANH→pin 6, CANL→pin 14, GND→pins 4 and/or 5. Leave pin 16 disconnected.</span></label>
@@ -148,8 +148,8 @@ footer{color:var(--muted);font-size:13px;margin-top:30px}
 #include "driver/twai.h"
 #include "esp_log.h"
 
-#define TX_GPIO GPIO_NUM_21
-#define RX_GPIO GPIO_NUM_22
+#define TX_GPIO GPIO_NUM_4
+#define RX_GPIO GPIO_NUM_5
 
 static const char *TAG = "obd";
 

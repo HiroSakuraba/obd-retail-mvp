@@ -174,6 +174,32 @@ static void test_response_framing(void)
           "error response framed");
 }
 
+static void test_b64(void)
+{
+    char out[64];
+    /* RFC 4648 vectors. */
+    CHECK(proto_b64_encode((const uint8_t *)"", 0, out, sizeof out) == 0 &&
+          strcmp(out, "") == 0, "b64 empty");
+    CHECK(proto_b64_encode((const uint8_t *)"f", 1, out, sizeof out) == 0 &&
+          strcmp(out, "Zg==") == 0, "b64 1 byte");
+    CHECK(proto_b64_encode((const uint8_t *)"fo", 2, out, sizeof out) == 0 &&
+          strcmp(out, "Zm8=") == 0, "b64 2 bytes");
+    CHECK(proto_b64_encode((const uint8_t *)"foo", 3, out, sizeof out) == 0 &&
+          strcmp(out, "Zm9v") == 0, "b64 3 bytes");
+    CHECK(proto_b64_encode((const uint8_t *)"foobar", 6, out, sizeof out) == 0 &&
+          strcmp(out, "Zm9vYmFy") == 0, "b64 6 bytes");
+    /* Short buffer is an error, never a truncated write. */
+    CHECK(proto_b64_encode((const uint8_t *)"foo", 3, out, 4) != 0,
+          "b64 short buffer rejected");
+    CHECK(proto_b64_encode((const uint8_t *)"foo", 3, out,
+                           proto_b64_len(3)) == 0 &&
+          strcmp(out, "Zm9v") == 0, "b64 exact-fit buffer ok");
+    CHECK(proto_b64_encode(NULL, 0, out, sizeof out) != 0,
+          "b64 NULL input rejected");
+    /* Chunk-sized payloads: 180 bytes -> 240 chars + NUL. */
+    CHECK(proto_b64_len(180) == 241, "b64 length of 180 bytes is 241");
+}
+
 int main(void)
 {
     test_allowlisted_pids_pass();
@@ -182,6 +208,7 @@ int main(void)
     test_dtc_and_vin_ops();
     test_version_mismatch();
     test_response_framing();
+    test_b64();
     printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

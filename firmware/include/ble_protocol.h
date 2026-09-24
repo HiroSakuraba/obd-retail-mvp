@@ -44,6 +44,14 @@ int proto_build_response(const ble_request_t *req, const char *data_json,
 int proto_build_error(const ble_request_t *req, const char *error_code,
                       char *buf, size_t buflen);
 
+/* Base64 (RFC 4648, no line breaks) for chunked envelopes. */
+/* Encoded length of inlen bytes, including the NUL terminator. */
+size_t proto_b64_len(size_t inlen);
+/* Encode in[0..inlen) into out (outlen bytes, incl. NUL).
+   Returns 0 on success, -1 on NULL args or short buffer. */
+int proto_b64_encode(const uint8_t *in, size_t inlen,
+                     char *out, size_t outlen);
+
 #ifdef __cplusplus
 }
 #endif

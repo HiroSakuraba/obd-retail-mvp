@@ -5,20 +5,26 @@ import com.glovebox.obd.ble.ApprovedDongleBleClient
 /**
  * Backend contract for the scan step.
  *
- * The long-term contract is measurement recipes: the backend returns a list
+ * The contract is measurement recipes: the backend returns a list
  * of *signals* (acquisition recipes), e.g.
  *
- *   { "signal": "o2_upstream_trace",
- *     "source": { "service": "01", "pid": "14" },
- *     "sample_rate_hz": 8, "duration_s": 10,
- *     "conditions": { "rpm_min": 2400, "rpm_max": 2600 },
- *     "derived": ["switch_count", "amplitude"] }
+ *   { "signal": "fuel_trim_idle_vs_2500",
+ *     "service": "01", "pids": ["06", "07", "0C"],
+ *     "sample_rate_hz": 1, "duration_s": 5,
+ *     "conditions": { ... },
+ *     "derived": ["trim_idle", "trim_2500"],
+ *     "test_id": "fuel_trim_idle_vs_2500", "family": "P0171_LEAN_BANK_1",
+ *     "acquired": false }
  *
  * served by `GET /v1/sessions/{id}/required-signals` as `{"signals": [...]}`.
  * Sampling a signal over time (the actual measurement protocol) is the job
  * of the future :app module; the :core scan below only needs the PID list,
- * so it derives plain Mode-01 PIDs from the signal sources and falls back
- * to [requiredPidsFor] when the backend returns none.
+ * so it derives plain Mode-01 PIDs from the recipe's flat "service"/"pids"
+ * fields and falls back to [requiredPidsFor] when the backend returns none.
+ *
+ * Legacy shape (still accepted as a fallback): a nested source block,
+ *   { "signal": ..., "source": { "service": "01", "pid": "14" }, ... }
+ * with a single "pid" string.
  *
  * HTTP wiring is pending the :app module — this interface is implemented
  * against the JSON shape above so the contract is pinned down now.
@@ -62,15 +68,40 @@ class OBDRepository(
     }
 
     /**
-     * Pull plain Mode-01 PID hex strings ("0C") out of measurement-recipe
-     * source blocks. Signals whose source is not service 01 (freeze frame,
-     * Mode 06 monitors, …) need a real measurement protocol and are not
-     * readable as static PIDs — they are skipped here, never zero-filled.
+     * Pull plain Mode-01 PID hex strings ("0C") out of measurement recipes.
+     *
+     * Current recipe shape (flat): "service" + "pids" list, e.g.
+     *   {"signal": "fuel_trim_idle_vs_2500", "service": "01",
+     *    "pids": ["06", "07", "0C"], ...}
+     * Legacy shape (fallback): a nested source block with a single pid,
+     *   {"signal": ..., "source": {"service": "01", "pid": "14"}, ...}
+     *
+     * Signals whose service is not 01 (freeze frame, Mode 06 monitors, …)
+     * need a real measurement protocol and are not readable as static PIDs
+     * — they are skipped here, never zero-filled.
      */
-    fun pidsForSignals(signals: List<Map<String, Any>>): List<String> =
-        signals.mapNotNull { signal ->
-            val source = signal["source"] as? Map<*, *> ?: return@mapNotNull null
-            if (source["service"] != "01") return@mapNotNull null
-            (source["pid"] as? String)?.uppercase()?.takeIf { it.matches(Regex("[0-9A-F]{2}")) }
-        }.distinct()
+    fun pidsForSignals(signals: List<Map<String, Any>>): List<String> {
+        val out = mutableListOf<String>()
+        for (signal in signals) {
+            val service: String?
+            val pids: List<String>
+            @Suppress("UNCHECKED_CAST")
+            if (signal["service"] is String && signal["pids"] is List<*>) {
+                // Current flat recipe shape.
+                service = signal["service"] as String
+                pids = (signal["pids"] as List<*>).filterIsInstance<String>()
+            } else {
+                // Legacy nested source block.
+                val source = signal["source"] as? Map<*, *> ?: continue
+                service = source["service"] as? String ?: continue
+                pids = listOfNotNull(source["pid"] as? String)
+            }
+            if (service != "01") continue
+            for (pid in pids) {
+                val norm = pid.uppercase()
+                if (norm.matches(Regex("[0-9A-F]{2}")) && norm !in out) out += norm
+            }
+        }
+        return out
+    }
 }

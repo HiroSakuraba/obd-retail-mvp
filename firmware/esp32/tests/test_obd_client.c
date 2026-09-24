@@ -21,6 +21,7 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <time.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@
 
 /* Provided by tcp_transport.c (host only). */
 can_transport_t *tcp_transport_open(const char *host, int port);
+can_transport_t *tcp_transport_open_variant(const char *host, int port,
+                                            can_variant_t variant);
 unsigned long tcp_transport_tx_count(const can_transport_t *t);
 
 static int failures = 0;
@@ -88,7 +91,8 @@ static const char *repo_root(void)
     return root;
 }
 
-static int sim_spawn(int port, const char *frame_log, const char *vehicle)
+static int sim_spawn(int port, const char *frame_log, const char *vehicle,
+                   int variant)
 {
     char portstr[16], simpath[4096], vpath[4096];
     const char *root = repo_root();
@@ -112,9 +116,13 @@ static int sim_spawn(int port, const char *frame_log, const char *vehicle)
             dup2(devnull, STDOUT_FILENO);
             close(devnull);
         }
-        execlp("python3", "python3", simpath,
-               "--port", portstr, "--frame-log", frame_log,
-               "--vehicle", vpath, (char *)NULL);
+        {
+            char varstr[8];
+            snprintf(varstr, sizeof varstr, "%d", variant);
+            execlp("python3", "python3", simpath,
+                   "--port", portstr, "--frame-log", frame_log,
+                   "--vehicle", vpath, "--variant", varstr, (char *)NULL);
+        }
         _exit(127);
     }
     return 0;
@@ -182,6 +190,26 @@ static void test_pids(can_transport_t *t)
     CHECK_CLOSE("pid 33: 101 kPa", v, 101.0);
 }
 
+static void test_freeze_frame(can_transport_t *t)
+{
+    double v;
+    /* Mode 02 snapshot stored when the DTC set: the sim's frozen values
+       equal its live ones (documented simulator limitation). */
+    CHECK("freeze 0C: ok", obd_read_freeze_frame(t, 0x0C, &v) == OBDC_OK);
+    CHECK_CLOSE("freeze 0C: 1726 rpm", v, 1726.0);
+    CHECK("freeze 05: ok", obd_read_freeze_frame(t, 0x05, &v) == OBDC_OK);
+    CHECK_CLOSE("freeze 05: 88 C", v, 88.0);
+    /* 0xFF is not allowlisted: refused before any frame is sent. */
+    CHECK("freeze FF: forbidden",
+          obd_read_freeze_frame(t, 0xFF, &v) == OBDC_ERR_FORBIDDEN);
+    /* 0x42 is allowlisted but the canned ECU does not answer it:
+       real ECUs stay silent; the client must time out and move on. */
+    v = -1.0;
+    CHECK("freeze 0x42: timeout (skip)",
+          obd_read_freeze_frame(t, 0x42, &v) == OBDC_ERR_TIMEOUT);
+    CHECK("freeze 0x42: value untouched", v == -1.0);
+}
+
 static void test_forbidden_before_tx(can_transport_t *t)
 {
     double v = -1.0;
@@ -231,10 +259,22 @@ static void test_full_scan(can_transport_t *t)
     CHECK("scan json: absent pid omitted", strstr(js, "\"42\"") == NULL);
 }
 
+/* Normalize a hex id: strip leading zeros ("000007DF" -> "7DF"). */
+static void norm_id(const char *hex, char *out, size_t cap)
+{
+    while (*hex == '0')
+        hex++;
+    if (!*hex)
+        hex = "0";
+    snprintf(out, cap, "%s", hex);
+}
+
 /* Wire audit: parse the simulator's frame log; every client frame must be
-   either a single-frame request to 0x7DF with an allowlisted service, or
-   a flow-control frame. */
-static void test_wire_audit(const char *frame_log, int min_frames)
+   either a single-frame request to the functional id with an allowlisted
+   service, or a flow-control frame to the physical id. func_id/fc_id are
+   the expected ids without leading zeros ("7DF"/"7E0", "18DB33F1"/...). */
+static void test_wire_audit(const char *frame_log, int min_frames,
+                            const char *func_id, const char *fc_id)
 {
     FILE *f = fopen(frame_log, "r");
     char line[256];
@@ -245,20 +285,34 @@ static void test_wire_audit(const char *frame_log, int min_frames)
         return;
     while (fgets(line, sizeof line, f)) {
         const char *id, *pci, *svc;
+        char nid[16];
+        const char *hex;
+        size_t i;
         nframes++;
         id = strstr(line, "\"id\": \"0x");
         pci = strstr(line, "\"pci\": \"");
         svc = strstr(line, "\"service\": \"0x");
         if (!id || !pci) { ok = 0; break; }
-        if (strncmp(id + 9, "7DF", 3) == 0) {
+        hex = id + 9;
+        for (i = 0; i < 8 && isxdigit((unsigned char)hex[i]); i++)
+            ;
+        if (i == 0 || i > 8) { ok = 0; break; }
+        {
+            char raw[16];
+            memcpy(raw, hex, i);
+            raw[i] = '\0';
+            norm_id(raw, nid, sizeof nid);
+        }
+        if (strcmp(nid, func_id) == 0) {
             if (strncmp(pci + 8, "SF", 2) != 0) { ok = 0; break; }
             if (!svc) { ok = 0; break; }
             if (!(strncmp(svc + 14, "01", 2) == 0 ||
+                  strncmp(svc + 14, "02", 2) == 0 ||
                   strncmp(svc + 14, "03", 2) == 0 ||
                   strncmp(svc + 14, "07", 2) == 0 ||
                   strncmp(svc + 14, "09", 2) == 0 ||
                   strncmp(svc + 14, "0A", 2) == 0)) { ok = 0; break; }
-        } else if (strncmp(id + 9, "7E0", 3) == 0) {
+        } else if (strcmp(nid, fc_id) == 0) {
             if (strncmp(pci + 8, "FC", 2) != 0) { ok = 0; break; }
         } else {
             ok = 0; break;
@@ -274,7 +328,7 @@ static void test_wire_audit(const char *frame_log, int min_frames)
 /* Spawn the simulator on a free port and connect. Returns the transport
    (caller closes) or NULL. */
 static can_transport_t *sim_up(const char *vehicle, const char *frame_log,
-                               int *port_out)
+                               int *port_out, can_variant_t variant)
 {
     can_transport_t *t = NULL;
     int port, tries = 0;
@@ -284,10 +338,11 @@ static can_transport_t *sim_up(const char *vehicle, const char *frame_log,
             break;
     if (port >= 35060)
         return NULL;
-    if (sim_spawn(port, frame_log, vehicle) != 0)
+    if (sim_spawn(port, frame_log, vehicle,
+                  variant == CAN_VAR_29B_500K ? 29 : 11) != 0)
         return NULL;
     while (tries++ < 50) {
-        t = tcp_transport_open("127.0.0.1", port);
+        t = tcp_transport_open_variant("127.0.0.1", port, variant);
         if (t)
             break;
         {
@@ -322,7 +377,7 @@ int main(void)
 
     /* Phase 1: Escape P0171 -- full suite. */
     frame_log = new_frame_log();
-    t = sim_up("escape-2018-p0171.json", frame_log, NULL);
+    t = sim_up("escape-2018-p0171.json", frame_log, NULL, CAN_VAR_11B_500K);
     if (!t) {
         printf("sim did not come up\n");
         return 1;
@@ -330,18 +385,19 @@ int main(void)
     test_vin(t, "1FMCU0GD0JUA12345");
     test_dtcs(t, esc_conf, 1, NULL, 0, NULL, 0);
     test_pids(t);
+    test_freeze_frame(t);
     test_forbidden_before_tx(t);
     test_unsupported_skips(t);
     test_full_scan(t);
     t->close(t);
     sim_kill();
-    test_wire_audit(frame_log, 20);
+    test_wire_audit(frame_log, 20, "7DF", "7E0");
     unlink(frame_log);
 
     /* Phase 2: Camry P0420 -- non-empty pending + permanent DTC paths,
        multi-frame VIN again, and one live PID for good measure. */
     frame_log = new_frame_log();
-    t = sim_up("camry-2020-p0420.json", frame_log, NULL);
+    t = sim_up("camry-2020-p0420.json", frame_log, NULL, CAN_VAR_11B_500K);
     if (!t) {
         printf("sim 2 did not come up\n");
         return 1;
@@ -356,7 +412,28 @@ int main(void)
     }
     t->close(t);
     sim_kill();
-    test_wire_audit(frame_log, 5);
+    test_wire_audit(frame_log, 5, "7DF", "7E0");
+    unlink(frame_log);
+
+    /* Phase 3: 29-bit variant -- same client code, extended identifiers.
+       Exercises the variant-aware request/response id mapping end to end. */
+    frame_log = new_frame_log();
+    t = sim_up("escape-2018-p0171.json", frame_log, NULL, CAN_VAR_29B_500K);
+    if (!t) {
+        printf("sim 3 (29-bit) did not come up\n");
+        return 1;
+    }
+    {
+        double v;
+        test_vin(t, "1FMCU0GD0JUA12345");
+        test_dtcs(t, esc_conf, 1, NULL, 0, NULL, 0);
+        CHECK("29-bit pid 0C: ok", obd_read_pid(t, 0x0C, &v) == OBDC_OK);
+        CHECK_CLOSE("29-bit pid 0C: 1726 rpm", v, 1726.0);
+        test_freeze_frame(t);
+    }
+    t->close(t);
+    sim_kill();
+    test_wire_audit(frame_log, 8, "18DB33F1", "18DA10F1");
     unlink(frame_log);
 
     printf("obd_client host tests: %d/%d passed\n",

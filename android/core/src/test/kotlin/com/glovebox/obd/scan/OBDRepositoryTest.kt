@@ -113,6 +113,53 @@ class OBDRepositoryTest {
         )
         assertEquals(listOf("0C"), repo.pidsForSignals(signals))
     }
+
+    @Test fun pidsForSignals_flatRecipeShape() {
+        // Current backend /required-signals shape: flat "service" + "pids".
+        val repo = OBDRepository(FakeBle(), FakeApi())
+        val signals = listOf(
+            mapOf<String, Any>(
+                "signal" to "fuel_trim_idle_vs_2500",
+                "service" to "01",
+                "pids" to listOf("06", "07", "0c")
+            ),
+            mapOf<String, Any>(
+                "signal" to "mode06_misfire_counts",
+                "service" to "06",
+                "pids" to listOf("01") // Mode 06: needs a measurement protocol
+            ),
+            mapOf<String, Any>(
+                "signal" to "warmup_curve",
+                "service" to "01",
+                "pids" to listOf("05", "ZZ") // bad hex dropped
+            )
+        )
+        assertEquals(listOf("06", "07", "0C", "05"), repo.pidsForSignals(signals))
+    }
+
+    @Test fun pidsForSignals_mixedShapesDeduped() {
+        val repo = OBDRepository(FakeBle(), FakeApi())
+        val signals = listOf(
+            mapOf<String, Any>("signal" to "a", "service" to "01", "pids" to listOf("0C")),
+            mapOf<String, Any>("signal" to "b", "source" to mapOf("service" to "01", "pid" to "0c")),
+            mapOf<String, Any>("signal" to "c", "service" to "01"), // no pids, no source
+            mapOf<String, Any>("signal" to "d", "service" to "02", "pids" to listOf("02"))
+        )
+        assertEquals(listOf("0C"), repo.pidsForSignals(signals))
+    }
+
+    @Test fun scan_derivesPidsFromFlatRecipes() = runBlocking {
+        val ble = FakeBle()
+        val api = FakeApi(signals = listOf(
+            mapOf("signal" to "fuel_trim_idle_vs_2500", "service" to "01",
+                "pids" to listOf("06", "07", "0C"), "acquired" to false),
+            mapOf("signal" to "mode06_misfire_counts", "service" to "06",
+                "pids" to emptyList<String>(), "acquired" to false)
+        ))
+        OBDRepository(ble, api).scan()
+        assertEquals(listOf("06", "07", "0C"), ble.requestedPids)
+        assertEquals(0, api.requiredPidsForCalls)
+    }
 }
 
 class VehicleSessionTest {

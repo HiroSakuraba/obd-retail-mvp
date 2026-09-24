@@ -66,16 +66,38 @@ pio run -t upload
 pio device monitor
 ```
 
-Wiring follows `hardware/build-guide.html` (bench stage): **GPIO21 ->
-transceiver TX, GPIO22 <- transceiver RX**, 500 kbit/s, transceiver on
-the 3.3 V rail, OBD pins 6/14 (CANH/CANL) + 4/5 (GND). The Rev A PCB
-remaps pins for the ESP32-C3-MINI-1 -- override with
-`-D CONFIG_OBD_TWAI_RX_PIN=<pin>`.
+Wiring follows `hardware/build-guide.html` (bench stage): **GPIO4 ->
+transceiver TX, GPIO5 <- transceiver RX**, 500 kbit/s, transceiver on
+the 3.3 V rail, OBD pins 6/14 (CANH/CANL) + 4/5 (GND). (GPIO4/5: the
+ESP32-C3 has no GPIO22, and GPIO20/21 are the USB-serial pins, so they
+stay free for flashing/monitor.) Override with
+`-D CONFIG_OBD_TWAI_TX_PIN=<pin> -D CONFIG_OBD_TWAI_RX_PIN=<pin>`.
+
+On first boot the firmware probes the four CAN variants (11/29-bit x
+500/250 kbit/s, 11-bit 500k first) by sending a single-frame `09 02`
+(VIN) request on each and locking to the first variant that answers.
+The variant is fixed for the session afterwards.
 
 ## BLE API
 
 Nordic UART service (`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`), RX characteristic
-write takes one JSON request line; the reply is notified on TX:
+write takes one JSON request line; the reply is notified on TX.
+
+Replies of 180 bytes or fewer are notified as one raw JSON frame. Larger
+replies (e.g. `full_scan`) are split into chunk envelopes:
+
+```
+{"v":1,"id":"<req id>","chunk":0,"chunks":3,"b64":"<base64 of bytes 0..119>"}
+{"v":1,"id":"<req id>","chunk":1,"chunks":3,"b64":"<base64 of bytes 120..239>"}
+...
+```
+
+Each envelope carries up to 120 raw bytes (160 base64 chars), so an
+envelope is at most ~215 bytes on the wire: the app must negotiate an
+ATT MTU of at least 218. The app concatenates the `b64` fields in `chunk`
+order and base64-decodes once to recover the full JSON reply. No phone
+client implements this yet -- the contract is defined here for the
+future `android:app` module.
 
 ```
 {"v":1,"id":"abc","op":"full_scan"}            -> evidence JSON

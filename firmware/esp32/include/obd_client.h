@@ -45,6 +45,7 @@ extern "C" {
 /* Services the client may transmit (subset of the firmware allowlist that
    the scan uses). */
 #define OBD_SVC_CURRENT_DATA   0x01u
+#define OBD_SVC_FREEZE_FRAME_DATA 0x02u
 #define OBD_SVC_STORED_DTC     0x03u
 #define OBD_SVC_PENDING_DTC    0x07u
 #define OBD_SVC_VEHICLE_INFO   0x09u
@@ -90,6 +91,11 @@ int obd_read_dtcs(can_transport_t *t, uint8_t service,
    OBDC_ERR_FORBIDDEN if the PID is not allowlisted (no frame is sent),
    OBDC_ERR_PROTOCOL if the response fails validation. */
 int obd_read_pid(can_transport_t *t, uint8_t pid, double *value_out);
+
+/* Read one frozen PID (service 02, frame 0): the snapshot stored when the
+   DTC was set. Same contract as obd_read_pid (OBDC_ERR_TIMEOUT if the ECU
+   stayed silent, OBDC_ERR_FORBIDDEN before any frame is transmitted). */
+int obd_read_freeze_frame(can_transport_t *t, uint8_t pid, double *value_out);
 
 /* Full scan: VIN, then the three DTC lists, then each PID in pid_list.
    VIN failure aborts the scan (OBD_ERR_*); everything else degrades

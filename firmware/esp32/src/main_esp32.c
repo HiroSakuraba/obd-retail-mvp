@@ -64,7 +64,12 @@ static void run_op(const ble_request_t *req, char *out, size_t cap)
             proto_build_error(req, "ERROR_INTERNAL", out, cap);
             return;
         }
-        proto_build_response(req, js, out, cap);
+        if (proto_build_response(req, js, out, cap) != 0) {
+            /* Reply buffer too small: report instead of sending
+               truncated JSON the phone would misparse. */
+            proto_build_error(req, "ERROR_INTERNAL", out, cap);
+            return;
+        }
         return;
     }
 
@@ -109,11 +114,14 @@ static void run_op(const ble_request_t *req, char *out, size_t cap)
         }
         break;
     }
-    case OP_READ_PID: {
+    case OP_READ_PID:
+    case OP_READ_FREEZE_FRAME: {
         double v = 0.0;
         unsigned pid = 0;
+        int frozen = (op == OP_READ_FREEZE_FRAME);
         sscanf(req->pid, "%2x", &pid);
-        rc = obd_read_pid(g_can, (uint8_t)pid, &v);
+        rc = frozen ? obd_read_freeze_frame(g_can, (uint8_t)pid, &v)
+                    : obd_read_pid(g_can, (uint8_t)pid, &v);
         if (rc == OBDC_ERR_TIMEOUT) {
             proto_build_error(req, "ERROR_NO_DATA", out, cap);
             return;
@@ -123,8 +131,8 @@ static void run_op(const ble_request_t *req, char *out, size_t cap)
                               out, cap);
             return;
         }
-        snprintf(data, sizeof data, "{\"pid\":\"%02X\",\"value\":%.4g}",
-                 pid, v);
+        snprintf(data, sizeof data, "{\"pid\":\"%02X\",\"value\":%.4g%s}",
+                 pid, v, frozen ? ",\"frozen\":true" : "");
         break;
     }
     default:
@@ -132,15 +140,24 @@ static void run_op(const ble_request_t *req, char *out, size_t cap)
                           out, cap);
         return;
     }
-    proto_build_response(req, data, out, cap);
+    if (proto_build_response(req, data, out, cap) != 0)
+        proto_build_error(req, "ERROR_INTERNAL", out, cap);
 }
+
+/* Provided by ble_gatt.c (NimBLE service wiring). Declared up here so
+   glovebox_on_ble_write() below sees the prototype. */
+void glovebox_ble_notify(const char *req_id, const uint8_t *data, size_t len);
+void glovebox_ble_start(void);
 
 /* NimBLE GATT write callback: one JSON request line in, one JSON reply
    notified out. (Full NimBLE service setup is in ble_gatt.c; this file
    owns the request -> OBD dispatch.) */
 void glovebox_on_ble_write(const uint8_t *in, size_t len)
 {
-    static char reply[BLE_RESP_MAX + 64];
+    /* Full-scan replies are up to ~2 KB of JSON; the BLE layer chunks
+       anything over 180 bytes into envelopes, so the buffer must hold
+       the largest reply we can build, not just BLE_RESP_MAX. */
+    static char reply[2304];
     ble_request_t req;
     int pr;
 
@@ -160,12 +177,9 @@ void glovebox_on_ble_write(const uint8_t *in, size_t len)
         run_op(&req, reply, sizeof reply);
     }
     ESP_LOGI(TAG, "reply: %s", reply);
-    glovebox_ble_notify((const uint8_t *)reply, strlen(reply));
+    glovebox_ble_notify((pr == 0 && req.id[0]) ? req.id : "unknown",
+                        (const uint8_t *)reply, strlen(reply));
 }
-
-/* Provided by ble_gatt.c (NimBLE service wiring). */
-void glovebox_ble_notify(const uint8_t *data, size_t len);
-void glovebox_ble_start(void);
 
 void app_main(void)
 {

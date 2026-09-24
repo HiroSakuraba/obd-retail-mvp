@@ -82,26 +82,37 @@ hardware, against the CAN-frame-level ECU simulator instead of the ELM327
 text-protocol simulator:
 
 ```bash
-python3 simulator/can_ecu_sim.py --self-test   # 9/9
-make -C firmware/esp32/tests check              # 55/55
+python3 simulator/can_ecu_sim.py --self-test   # 13/13 (incl. Mode 02 + 29-bit)
+make -C firmware/esp32/tests check              # 81/81 (incl. 29-bit phase)
+make -C firmware/esp32/tests check-app          # ESP-IDF app stub-compile
 ```
 
 What it covers: the real `obd_client.c` (the file that ships on the
 ESP32) does multi-frame VIN with ISO-TP flow control, confirmed/pending/
 permanent DTC decode per SAE J2012 on two canned vehicles (Escape P0171;
 Camry P0420 with non-empty pending P0133 + permanent P0420), 15 live PIDs
-against exact canned values, graceful skip on ECU silence, and a
-**wire audit** proving the client transmitted nothing but allowlisted
-services (`01/03/07/09/0A` to `0x7DF`) and flow-control frames. A
-non-allowlisted PID is refused with zero frames transmitted.
+against exact canned values, Mode 02 freeze frames (snapshot values +
+triggering DTC), graceful skip on ECU silence, and a **wire audit**
+proving the client transmitted nothing but allowlisted services
+(`01/02/03/07/09/0A`) and ISO-TP flow-control frames. A third phase runs
+the whole client against a 29-bit simulator, exercising the variant-aware
+request/response id mapping (`0x18DB33F1`/`0x18DAF110`). A non-allowlisted
+PID is refused with zero frames transmitted. `check-app` compiles the
+actual ESP-IDF application sources (`main_esp32.c`, `twai_transport.c`,
+`ble_gatt.c`) with `-DESP_PLATFORM` against stub headers — the
+compile-coverage the first external review found missing.
 
-**Pass criteria (Stage A2):** both commands green. (Both are: 24 Sept 2026.)
+**Pass criteria (Stage A2):** all three commands green. (All are: 24 Sept 2026.)
 
 ## Stage B2 — dongle firmware on the bench
 
-Hardware: the bench build from `hardware/build-guide.html` (ESP32 +
-transceiver, GPIO21 TX / GPIO22 RX, 500 kbit/s) plus either a bench ECU
-simulator that answers 0902/03/07/0A/01 on CAN or a real parked vehicle.
+Hardware: the bench build from `hardware/build-guide.html` (ESP32-C3 +
+TCAN transceiver, GPIO4 TX / GPIO5 RX) plus either a bench ECU simulator
+that answers 0902/03/07/0A/01/02 on CAN or a real parked vehicle.
+
+Narrow milestone (the first thing that must work end to end): ESP32-C3 →
+TCAN → sim CAN ECU → BLE phone → VIN + DTC + RPM, using the exact binary
+built in CI. Everything else is secondary until that chain is green.
 
 Procedure:
 1. Flash `firmware/esp32` (`pio run -t upload`); confirm `Glovebox-OBD`
@@ -109,14 +120,20 @@ Procedure:
 2. `full_scan` over BLE → VIN matches the door jamb; DTC lists match a
    reference scan tool, including the empty case.
 3. Live PIDs sane (coolant within ambient..105 °C, RPM 0 at rest).
+   Freeze frame: `read_freeze_frame` for a stored DTC returns the Mode 02
+   snapshot with the triggering DTC.
 4. Pull the transceiver's CANH/CANL mid-scan → client times out cleanly,
    reconnects on the next request (no wedge).
 5. Negative check: capture the CAN traffic and confirm **no frame outside
-   `0x7DF` requests with services 01/03/07/09/0A and flow control to
-   `0x7E0`..`0x7E7` was ever transmitted** — the read-only rule on the
-   wire, not just in code review.
+   functional requests with services 01/02/03/07/09/0A and ISO-TP flow
+   control to the physical id was ever transmitted** — the read-only rule
+   on the wire, not just in code review. Repeat with a 29-bit ECU if
+   available: the firmware must auto-detect the variant (extended ids)
+   and still pass steps 2–4.
+6. Replies over 180 bytes (e.g. `full_scan`) arrive as chunk envelopes
+   (`chunk`/`chunks`/`b64`) and reassemble to the full JSON on the phone.
 
-**Pass criteria (Stage B2):** all 5 steps pass on the bench rig.
+**Pass criteria (Stage B2):** all 6 steps pass on the bench rig.
 
 ## Stage C — 5-vehicle checklist (M1 release criterion)
 

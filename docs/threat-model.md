@@ -42,6 +42,15 @@
   a device that touches a vehicle bus.
 - Encrypt the link (LE Secure Connections); the JSON protocol carries no
   secrets, but VIN + DTCs are still personal data in transit.
+
+> **Prototype status (honest):** the current ESP32 firmware in
+> `firmware/esp32/` implements *none* of the above BLE security yet — no
+> pairing, no bonding, no encryption, no OOB enrollment. It is a
+> lab-prototype transport for bench validation (simulator and parked-car
+> captures on an isolated bench), not a shippable device. The QR/OOB model
+> above is the production target; do not connect the prototype firmware to
+> a vehicle outside a controlled bench until pairing/bonding is
+> implemented and audited.
 - The app binds to the dongle's cryptographic device identity (plus
   attested firmware version) and refuses to run diagnostics against an
   unrecognized device. The BLE MAC is *not* the device identity — BLE

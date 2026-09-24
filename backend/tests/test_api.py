@@ -413,6 +413,7 @@ def test_fitment_resolves_action_to_sku():
     f = r.json()
     assert f["sku"] == "CAT-CRV24-FED", f
     assert f["fitment_confirmed"] is True
+    assert f["purchasable"] is True, f
     assert f["price_usd"] > 0 and f["guide_url"] and f["video_url"]
     assert "CARB" in (f["emissions_note"] or "")
 
@@ -425,6 +426,47 @@ def test_fitment_california_blocks_federal_cat():
     f = r.json()
     assert f["stock"] == "not_available_ca", f
     assert "CALIFORNIA" in f["emissions_note"], f
+    # Fitment is still exact for the vehicle; the CA sale block rides on
+    # stock/emissions_note, not on the purchasable flag.
+    assert f["fitment_confirmed"] is True and f["purchasable"] is True, f
+
+
+def test_fitment_default_fallback_is_not_purchasable():
+    """Generic/default SKUs are reference-only: no fitment confirmation,
+    no purchase path (no guide/video links)."""
+    # 2018 Ford Escape 1.5L has no exact coil fit -> COIL-UNIV default.
+    r = client.post("/v1/fitment/resolve",
+                    json={"repair_action": "replace_ignition_coil",
+                          "vin": "1FMCU0GD0JUA12345"})
+    assert r.status_code == 200, r.text
+    f = r.json()
+    assert f["fitment_confirmed"] is False, f
+    assert f["purchasable"] is False, f
+    assert "guide_url" not in f and "video_url" not in f, f
+    # sku/price stay as reference; the note says verify before purchase.
+    assert f["sku"] == "COIL-UNIV" and f["price_usd"] > 0, f
+    assert "verify fitment" in f["fitment_note"], f
+
+
+def test_fitment_default_thermostat_not_purchasable():
+    r = client.post("/v1/fitment/resolve",
+                    json={"repair_action": "replace_thermostat",
+                          "vin": "1FMCU0GD0JUA12345"})
+    f = r.json()
+    assert f["fitment_confirmed"] is False
+    assert f["purchasable"] is False, f
+    assert "guide_url" not in f and "video_url" not in f, f
+
+
+def test_fitment_exact_ignition_coil_is_purchasable():
+    r = client.post("/v1/fitment/resolve",
+                    json={"repair_action": "replace_ignition_coil",
+                          "vin": "2HGFC2F59GH123456"})
+    f = r.json()
+    assert f["sku"] == "COIL-CIVIC20", f
+    assert f["fitment_confirmed"] is True
+    assert f["purchasable"] is True, f
+    assert f["guide_url"] and f["video_url"], f
 
 
 def test_fitment_unknown_action_rejected():
@@ -432,6 +474,21 @@ def test_fitment_unknown_action_rejected():
                     json={"repair_action": "replace_flux_capacitor",
                           "vin": "1FMCU0GD0JUA12345"})
     assert r.status_code == 422, r.status_code
+
+
+def test_analytics_demand_reports_all_time():
+    """The demand count is all-time: the field must say so, not 7d."""
+    for _ in range(5):
+        _new_session(["P0442"])
+    r = client.get("/v1/analytics/demand?repair_family=P0442_EVAP_SMALL_LEAK")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["records"], body
+    rec = body["records"][0]
+    assert rec["repair_family"] == "P0442_EVAP_SMALL_LEAK"
+    assert "sessions_all_time" in rec and "sessions_7d" not in rec, rec
+    assert rec["sessions_all_time"] >= 5
+    assert rec["minimum_privacy_count_met"] is True
 
 
 def test_fitment_diagnostic_action_has_no_parts():

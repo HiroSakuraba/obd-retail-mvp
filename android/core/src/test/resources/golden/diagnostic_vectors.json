@@ -1,0 +1,641 @@
+{
+  "generated_from": "backend/app/engine.py (canonical)",
+  "vectors": [
+    {
+      "dtcs": [
+        {
+          "code": "P0420",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 2,
+        "family": "P0420_CATALYST_EFFICIENCY_BANK1",
+        "scores": {
+          "downstream_o2_sensor_fault": 0.089069,
+          "engine_misfire_history": 0.060729,
+          "exhaust_leak": 0.075574,
+          "failing_catalytic_converter": 0.666667,
+          "other": 0.107962
+        },
+        "test_outcomes": {},
+        "top": "failing_catalytic_converter"
+      },
+      "families": [
+        "P0420_CATALYST_EFFICIENCY_BANK1"
+      ],
+      "flags": [],
+      "name": "dedup_cruise_o2_trace_strongest_rule_wins",
+      "note": "rules switch_ratio>=0.75 and downstream_swing_v>=0.5 both fire in group cruise_o2_trace; per hypothesis only the stronger |ln m| survives (2 records dropped)",
+      "observations": {
+        "cruise_o2_trace": {
+          "fields": {
+            "downstream_swing_v": 0.6,
+            "switch_ratio": 0.8
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0420",
+          "status": "confirmed"
+        },
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 1,
+        "confidence": "moderate",
+        "deduped_dropped": 2,
+        "family": "P0420_CATALYST_EFFICIENCY_BANK1",
+        "scores": {
+          "downstream_o2_sensor_fault": 0.121457,
+          "engine_misfire_history": 0.082812,
+          "exhaust_leak": 0.103055,
+          "failing_catalytic_converter": 0.545455,
+          "other": 0.147221
+        },
+        "test_outcomes": {},
+        "top": "failing_catalytic_converter"
+      },
+      "families": [
+        "P0171_LEAN_BANK_1",
+        "P0420_CATALYST_EFFICIENCY_BANK1"
+      ],
+      "flags": [],
+      "name": "dedup_plus_code_context_reduce",
+      "note": "same as above, but P0171 also present: reduce_if_present halves failing_catalytic_converter after dedup",
+      "observations": {
+        "cruise_o2_trace": {
+          "fields": {
+            "downstream_swing_v": 0.6,
+            "switch_ratio": 0.8
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0302",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P030X_MISFIRE",
+        "scores": {
+          "compression": 0.08377,
+          "fuel_injector": 0.219895,
+          "ignition_coil": 0.04712,
+          "other": 0.125654,
+          "spark_plug": 0.418848,
+          "vacuum_leak": 0.104712
+        },
+        "test_outcomes": {
+          "coil_swap": "stays_on_cylinder"
+        },
+        "top": "spark_plug"
+      },
+      "families": [
+        "P030X_MISFIRE"
+      ],
+      "flags": [],
+      "name": "categorical_negative_no_leak_found",
+      "note": "a 'no' answer is evidence too: coil_swap staying on the cylinder down-weights ignition_coil (x0.15)",
+      "observations": {
+        "coil_swap": {
+          "fields": {},
+          "outcome": "stays_on_cylinder"
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.126263,
+          "fuel_delivery": 0.252525,
+          "maf_bias": 0.30303,
+          "other": 0.176768,
+          "vacuum_leak": 0.141414
+        },
+        "test_outcomes": {
+          "inspect_intake": "no_leak_found"
+        },
+        "top": "maf_bias"
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "categorical_no_leak",
+      "note": "categorical outcome resolves via the outcomes map",
+      "observations": {
+        "inspect_intake": {
+          "fields": {},
+          "outcome": "no_leak_found"
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0442",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0442_EVAP_SMALL_LEAK",
+        "scores": {
+          "evap_hose_or_canister_leak": 0.09134,
+          "loose_or_faulty_gas_cap": 0.711744,
+          "other": 0.130486,
+          "purge_or_vent_valve": 0.066429
+        },
+        "test_outcomes": {
+          "gas_cap_condition": "cap_damaged"
+        },
+        "top": "loose_or_faulty_gas_cap"
+      },
+      "families": [
+        "P0442_EVAP_SMALL_LEAK"
+      ],
+      "flags": [],
+      "name": "evap_guided_categorical",
+      "note": "P0442 family: damaged cap boosts loose_or_faulty_gas_cap",
+      "observations": {
+        "gas_cap_condition": {
+          "fields": {},
+          "outcome": "cap_damaged"
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.060976,
+          "fuel_delivery": 0.121951,
+          "maf_bias": 0.146341,
+          "other": 0.085366,
+          "vacuum_leak": 0.585366
+        },
+        "test_outcomes": {
+          "inspect_intake": "yes"
+        },
+        "top": "vacuum_leak"
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "legacy_yes_no_guided_fallback",
+      "note": "flat field map (no outcome key): falls back to updates_if_yes, recorded as outcome 'yes'",
+      "observations": {
+        "inspect_intake": {
+          "fields": {
+            "answer": 1.0
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.1,
+          "fuel_delivery": 0.2,
+          "maf_bias": 0.24,
+          "other": 0.14,
+          "vacuum_leak": 0.32
+        },
+        "test_outcomes": {
+          "inspect_intake": null
+        },
+        "top": "vacuum_leak"
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "legacy_no_answer",
+      "note": "answer 0.0 with no outcome: no updates at all",
+      "observations": {
+        "inspect_intake": {
+          "fields": {
+            "answer": 0.0
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        },
+        {
+          "code": "P0174",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 1,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.079618,
+          "fuel_delivery": 0.159236,
+          "maf_bias": 0.191083,
+          "other": 0.111465,
+          "vacuum_leak": 0.458599
+        },
+        "test_outcomes": {},
+        "top": "vacuum_leak"
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "code_context_p0171_p0174_boosts_vacuum_leak",
+      "note": "P0171+P0174: boost_if_present multiplies vacuum_leak by 1.8",
+      "observations": {}
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0302",
+          "status": "confirmed"
+        },
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 1,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P030X_MISFIRE",
+        "scores": {
+          "compression": 0.062943,
+          "fuel_injector": 0.094414,
+          "ignition_coil": 0.377655,
+          "other": 0.094414,
+          "spark_plug": 0.295043,
+          "vacuum_leak": 0.075531
+        },
+        "test_outcomes": {},
+        "top": "ignition_coil"
+      },
+      "expected_ranking": [
+        "P030X_MISFIRE",
+        "P0171_LEAN_BANK_1"
+      ],
+      "families": [
+        "P0171_LEAN_BANK_1",
+        "P030X_MISFIRE"
+      ],
+      "flags": [],
+      "name": "multi_graph_p0302_p0171_ranked",
+      "note": "two graphs match; ranking is by best top score, then family",
+      "observations": {
+        "mode06_misfire_counts": {
+          "fields": {
+            "dominant_share": 0.85
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0420",
+          "status": "confirmed"
+        },
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.1,
+          "fuel_delivery": 0.2,
+          "maf_bias": 0.24,
+          "other": 0.14,
+          "vacuum_leak": 0.32
+        },
+        "test_outcomes": {},
+        "top": "vacuum_leak"
+      },
+      "expected_ranking": [
+        "P0171_LEAN_BANK_1",
+        "P0420_CATALYST_EFFICIENCY_BANK1"
+      ],
+      "families": [
+        "P0171_LEAN_BANK_1",
+        "P0420_CATALYST_EFFICIENCY_BANK1"
+      ],
+      "flags": [],
+      "name": "multi_graph_ranking_lean_catalyst",
+      "note": "no observations: ranking falls back to priors (+ code context reduce on the P0420 graph)",
+      "observations": {}
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.060976,
+          "fuel_delivery": 0.121951,
+          "maf_bias": 0.146341,
+          "other": 0.085366,
+          "vacuum_leak": 0.585366
+        },
+        "test_outcomes": {
+          "inspect_intake": "leak_found"
+        },
+        "top": "vacuum_leak"
+      },
+      "expected_basket": {
+        "gated": [],
+        "guidance": [
+          "inspect-intake-system"
+        ],
+        "items": [
+          "replace-intake-pcv-hose"
+        ]
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "basket_hose_satisfied_by_leak_found",
+      "note": "confirming evidence present: replacement offered + diagnostic guidance",
+      "observations": {
+        "inspect_intake": {
+          "fields": {},
+          "outcome": "leak_found"
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.079114,
+          "fuel_delivery": 0.110759,
+          "maf_bias": 0.142405,
+          "other": 0.110759,
+          "vacuum_leak": 0.556962
+        },
+        "test_outcomes": {},
+        "top": "vacuum_leak"
+      },
+      "expected_basket": {
+        "gated": [
+          "replace-intake-pcv-hose"
+        ],
+        "guidance": [
+          "inspect-intake-system"
+        ],
+        "items": []
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "basket_hose_gated_without_visual_confirmation",
+      "note": "score band reached but inspect_intake:leak_found never recorded: repair gated, diagnostic guidance still shown",
+      "observations": {
+        "fuel_trim_idle_vs_2500": {
+          "fields": {
+            "trim_2500": 2.0,
+            "trim_idle": 12.0
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {
+          "exhaust_or_o2": 0.1,
+          "fuel_delivery": 0.2,
+          "maf_bias": 0.24,
+          "other": 0.14,
+          "vacuum_leak": 0.32
+        },
+        "test_outcomes": {},
+        "top": "vacuum_leak"
+      },
+      "expected_basket": {
+        "gated": [],
+        "guidance": [],
+        "items": []
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [],
+      "name": "basket_no_evidence",
+      "note": "empty observations: basket refuses with 'not enough evidence'",
+      "observations": {}
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0171",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": true,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "insufficient",
+        "deduped_dropped": 0,
+        "family": "P0171_LEAN_BANK_1",
+        "scores": {},
+        "test_outcomes": {},
+        "top": null
+      },
+      "families": [
+        "P0171_LEAN_BANK_1"
+      ],
+      "flags": [
+        "flashing_mil"
+      ],
+      "name": "stop_if_flashing_mil_halts_scoring",
+      "note": "stop_if flag short-circuits scoring entirely",
+      "observations": {
+        "fuel_trim_idle_vs_2500": {
+          "fields": {
+            "trim_2500": 2.0,
+            "trim_idle": 12.0
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0128",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0128_THERMOSTAT_RATIONALITY",
+        "scores": {
+          "coolant_temp_sensor": 0.080537,
+          "low_coolant": 0.080537,
+          "other": 0.167785,
+          "thermostat_stuck_open": 0.671141
+        },
+        "test_outcomes": {},
+        "top": "thermostat_stuck_open"
+      },
+      "families": [
+        "P0128_THERMOSTAT_RATIONALITY"
+      ],
+      "flags": [],
+      "name": "obd_live_p0128_warmup",
+      "note": "single rule fires: thermostat_stuck_open boosted",
+      "observations": {
+        "warmup_curve": {
+          "fields": {
+            "ect_after_10min_c": 60.0,
+            "ect_fluctuates": 0.0,
+            "ect_rise_c": 1.0
+          }
+        }
+      }
+    },
+    {
+      "dtcs": [
+        {
+          "code": "P0133",
+          "status": "confirmed"
+        }
+      ],
+      "expect_stopped": false,
+      "expected": {
+        "code_context_applied": 0,
+        "confidence": "moderate",
+        "deduped_dropped": 0,
+        "family": "P0133_O2_SLOW_RESPONSE_B1S1",
+        "scores": {
+          "aging_o2_sensor": 0.592978,
+          "contaminated_sensor": 0.117035,
+          "exhaust_leak_before_sensor": 0.104031,
+          "other": 0.104031,
+          "wiring_or_connector": 0.081925
+        },
+        "test_outcomes": {},
+        "top": "aging_o2_sensor"
+      },
+      "families": [
+        "P0133_O2_SLOW_RESPONSE_B1S1"
+      ],
+      "flags": [],
+      "name": "obd_live_p0133_slow_o2",
+      "note": "slow switching: aging_o2_sensor boosted",
+      "observations": {
+        "o2_response_time": {
+          "fields": {
+            "o2_amplitude_v": 0.5,
+            "o2_switches_per_10s": 3.0
+          }
+        }
+      }
+    }
+  ],
+  "version": 1
+}

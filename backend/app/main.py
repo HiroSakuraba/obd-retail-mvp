@@ -224,7 +224,11 @@ def resolve_fitment_endpoint(f: FitmentIn) -> dict:
 @app.get("/v1/analytics/demand")
 def analytics_demand(repair_family: str | None = None) -> dict:
     """Aggregated repair counts. Families with fewer than 5 sessions are
-    suppressed (minimum privacy count)."""
+    suppressed (minimum privacy count).
+
+    The count is ALL-TIME: there is deliberately no 7-day window here.
+    The field is named accordingly until a regional/time-series demand
+    system with real timestamps exists."""
     counts: dict[str, int] = {}
     for s in SESSIONS.values():
         g = engine.graph_for_dtcs(_codes(s["dtcs"]))
@@ -235,7 +239,7 @@ def analytics_demand(repair_family: str | None = None) -> dict:
             continue
         counts[key] = counts.get(key, 0) + 1
     records = [
-        {"repair_family": k, "sessions_7d": n,
+        {"repair_family": k, "sessions_all_time": n,
          "minimum_privacy_count_met": n >= 5}
         for k, n in sorted(counts.items())
     ]

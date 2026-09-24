@@ -2,7 +2,8 @@
 /* tcp_transport.c - host test transport for the OBD client.
  *
  * Forwards CAN frames over TCP to simulator/can_ecu_sim.py using its
- * 11-byte framing: struct ">H B 8s" = CAN id, DLC, data padded to 8.
+ * 14-byte framing: struct ">I B B 8s" = CAN id, DLC, flags, data padded
+ * to 8. Flags bit 0 = extended (29-bit) identifier.
  * Host-only (POSIX sockets); never compiled into the ESP32 firmware.
  */
 
@@ -37,15 +38,18 @@ static uint32_t tcp_millis(can_transport_t *t)
 static int tcp_send(can_transport_t *t, const can_frame_t *f)
 {
     tcp_ctx_t *c = (tcp_ctx_t *)t->ctx;
-    uint8_t buf[11];
+    uint8_t buf[14];
     size_t sent = 0;
 
     if (!c || !f || f->dlc > 8)
         return -1;
-    buf[0] = (uint8_t)((f->id >> 8) & 0xFF);
-    buf[1] = (uint8_t)(f->id & 0xFF);
-    buf[2] = f->dlc;
-    memcpy(buf + 3, f->data, 8);
+    buf[0] = (uint8_t)((f->id >> 24) & 0xFF);
+    buf[1] = (uint8_t)((f->id >> 16) & 0xFF);
+    buf[2] = (uint8_t)((f->id >> 8) & 0xFF);
+    buf[3] = (uint8_t)(f->id & 0xFF);
+    buf[4] = f->dlc;
+    buf[5] = f->extd ? 0x01 : 0x00;
+    memcpy(buf + 6, f->data, 8);
     while (sent < sizeof buf) {
         ssize_t n = send(c->sock, buf + sent, sizeof buf - sent, 0);
         if (n <= 0)
@@ -59,7 +63,7 @@ static int tcp_send(can_transport_t *t, const can_frame_t *f)
 static int tcp_recv(can_transport_t *t, can_frame_t *f, uint32_t timeout_ms)
 {
     tcp_ctx_t *c = (tcp_ctx_t *)t->ctx;
-    uint8_t buf[11];
+    uint8_t buf[14];
     size_t got = 0;
     fd_set rfds;
     struct timeval tv;
@@ -78,9 +82,11 @@ static int tcp_recv(can_transport_t *t, can_frame_t *f, uint32_t timeout_ms)
             return -1;
         got += (size_t)n;
     }
-    f->id = (uint32_t)((buf[0] << 8) | buf[1]);
-    f->dlc = buf[2] > 8 ? 8 : buf[2];
-    memcpy(f->data, buf + 3, 8);
+    f->id = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
+            ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
+    f->extd = (buf[5] & 0x01) != 0;
+    f->dlc = buf[4] > 8 ? 8 : buf[4];
+    memcpy(f->data, buf + 6, 8);
     return 0;
 }
 
@@ -97,8 +103,11 @@ static void tcp_close(can_transport_t *t)
     free(t);
 }
 
-/* Open a transport to a running can_ecu_sim.py. Returns NULL on failure. */
-can_transport_t *tcp_transport_open(const char *host, int port)
+/* Open a transport to a running can_ecu_sim.py, negotiating the given
+   CAN variant (the simulator must be started with the matching
+   --variant). Returns NULL on failure. */
+can_transport_t *tcp_transport_open_variant(const char *host, int port,
+                                            can_variant_t variant)
 {
     tcp_ctx_t *c;
     can_transport_t *t;
@@ -128,6 +137,9 @@ can_transport_t *tcp_transport_open(const char *host, int port)
     }
     c->sock = sock;
     t->ctx = c;
+    /* The variant is fixed for the life of the transport; the test
+       simulator is started with the matching --variant. */
+    t->variant = variant;
     t->send = tcp_send;
     t->recv = tcp_recv;
     t->millis = tcp_millis;
@@ -140,4 +152,11 @@ unsigned long tcp_transport_tx_count(const can_transport_t *t)
 {
     const tcp_ctx_t *c = t ? (const tcp_ctx_t *)t->ctx : NULL;
     return c ? c->tx_frames : 0;
+}
+
+/* Open a transport to a running can_ecu_sim.py (11-bit/500k variant).
+   Returns NULL on failure. */
+can_transport_t *tcp_transport_open(const char *host, int port)
+{
+    return tcp_transport_open_variant(host, port, CAN_VAR_11B_500K);
 }

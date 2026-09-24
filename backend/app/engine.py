@@ -1,7 +1,12 @@
 """Deterministic diagnostic engine: graph scoring + next-test + repair basket.
 
-Mirrors android/.../diagnosis/DiagnosticEngine.kt so the app and the backend
-agree exactly.
+The Android DiagnosticEngine.kt is required to agree with this engine, and
+that parity is enforced by shared golden test vectors, not by prose:
+backend/app/golden_vectors.py runs this engine over the representative
+cases and writes tests/golden/diagnostic_vectors.json, which both the
+Python suite (backend/tests/test_golden_vectors.py) and the Android Gradle
+tests assert against. If engine semantics change intentionally, regenerate
+the vectors and update both sides together.
 
 Scoring: diagnostic_score(h) ∝ prior(h) × Π evidence multipliers from
 completed tests. These scores are UNCALIBRATED expert weights, not calibrated

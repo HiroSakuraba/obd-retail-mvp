@@ -1,0 +1,22 @@
+# Compiled C test binaries (rebuilt by make; never tracked — a stale
+# non-executable copy breaks `make test` in CI, 24 Sept 2026).
+firmware/tests/test_allowlist
+firmware/esp32/tests/test_obd_client
+*.o
+*.a
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Node (web bench simulator)
+node_modules/
+
+# PlatformIO / ESP-IDF build trees
+firmware/esp32/.pio/
+firmware/esp32/.vscode/
+
+# Host stub-compile artifacts
+firmware/esp32/tests/stubs_build/

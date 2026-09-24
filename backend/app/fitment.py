@@ -193,7 +193,15 @@ def resolve_fitment(repair_action: str, vin: str | None = None,
         "fitment_confirmed": fitment_confirmed,
         **part,
     }
+    # A part is only purchasable from THIS record when the catalog confirmed
+    # an exact fit for the vehicle. Default-fallback SKUs stay
+    # reference-only (sku/price visible for comparison, but no purchase
+    # path): buying an unconfirmed coil, thermostat or converter is how
+    # wrong-part returns and emissions violations happen.
+    record["purchasable"] = fitment_confirmed
     if not fitment_confirmed:
+        record.pop("guide_url", None)
+        record.pop("video_url", None)
         record["fitment_note"] = (
             "No exact-fit catalog entry for this vehicle in the mock "
             "catalog; verify fitment before purchase.")
