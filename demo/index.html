@@ -23,6 +23,8 @@
   button.secondary{background:#222b37;color:#e8eef5;border:1px solid #334052}
   button.danger{background:#3a2025;color:#ffd9df;border:1px solid #65333c}
   button:disabled{opacity:.35;cursor:not-allowed}
+  select{background:#0e1218;color:#e8eef5;border:1px solid #334052;border-radius:10px;
+         padding:10px 12px;font-size:.95rem;margin:4px 6px 4px 0;max-width:100%}
   .status{padding:12px;border-radius:12px;background:#0a0e14;border:1px solid #263243;
           min-height:46px;margin:12px 0}
   .bar{height:9px;background:#222a35;border-radius:999px;overflow:hidden}
@@ -36,9 +38,10 @@
 <body>
 <div class="wrap">
   <h1>Glovebox OBD — Interactive MVP Demo</h1>
-  <p class="lede">A mock of the product logic with no real vehicle. “Scan vehicle”
-  injects a VIN, a P0171, and live values; the diagnosis is deterministic —
-  posterior(h) ∝ prior(h) × likelihood multipliers from the evidence graph.</p>
+  <p class="lede">A mock of the product logic with no real vehicle. Pick a fault
+  family, tap “Scan vehicle” to inject a VIN, the DTC, and live values; the
+  diagnosis is deterministic — posterior(h) ∝ prior(h) × likelihood multipliers
+  from the evidence graph.</p>
 
   <div class="grid">
     <div class="span4 card"><div class="small">Vehicle</div>
@@ -50,12 +53,21 @@
   </div>
 
   <div style="margin-top:12px">
+    <label class="small" for="familySel">Fault family:&nbsp;</label>
+    <select id="familySel">
+      <option value="P0171">P0171 — System too lean, bank 1</option>
+      <option value="P030X">P0302 — Cylinder 2 misfire</option>
+      <option value="P0128">P0128 — Coolant temp below thermostat temp</option>
+      <option value="P0420">P0420 — Catalyst efficiency below threshold</option>
+      <option value="P0442">P0442 — EVAP small leak detected</option>
+      <option value="P0133">P0133 — O₂ sensor slow response</option>
+    </select><br/>
     <button id="scanBtn">Scan vehicle</button>
     <button id="testBtn" class="secondary" disabled>Run next test</button>
     <button id="repairBtn" class="secondary" disabled>Build repair basket</button>
     <button id="resetBtn" class="danger">Reset</button>
   </div>
-  <div id="status" class="status">Plug in the dongle and tap Scan vehicle.</div>
+  <div id="status" class="status">Pick a fault family and tap Scan vehicle.</div>
 
   <div class="grid" style="margin-top:10px">
     <div class="card span6"><h3>Evidence</h3><div id="evidence" class="small">None yet.</div></div>
@@ -65,93 +77,268 @@
 
   <div class="note"><strong>Design rule:</strong> a DTC is evidence, not a parts
   recommendation. Nothing below names a part until the evidence supports a cause —
-  and even then the basket is provisional until confirmed.</div>
+  and even then the basket is provisional until confirmed. Watch P0420: the first
+  test points at the catalytic converter, but the basket stays empty until a second
+  test confirms it.</div>
 </div>
 
 <script>
-const PRIORS = {vacuumLeak:.32, mafBias:.24, fuelDelivery:.20, exhaustO2:.10, other:.14};
-const LABELS = {vacuumLeak:'Vacuum / intake leak', mafBias:'MAF bias or contamination',
-  fuelDelivery:'Fuel delivery issue', exhaustO2:'Exhaust leak / O₂ issue', other:'Other'};
-const state = {scanned:false, tested:false};
+const FAMILIES = {
+P0171: {
+  vehicle:'2018 Ford Escape 1.5L', vin:'VIN 1FMCU0GD… (demo)',
+  dtc:'P0171 — System too lean, bank 1',
+  scanStatus:'<strong>What the ECU detected:</strong> it is adding more fuel than expected. ' +
+    'This does not identify a failed part. Next: compare fuel trim at idle with fuel trim at 2,500 RPM.',
+  scanEvidence:'Confirmed DTC: <strong>P0171</strong><br>LTFT at idle: <strong>+22%</strong><br>' +
+    'STFT at idle: <strong>+11%</strong><br>MAF: plausible but not conclusive<br>No severe misfire detected.',
+  priors:{vacuumLeak:.32, mafBias:.24, fuelDelivery:.20, exhaustO2:.10, other:.14},
+  labels:{vacuumLeak:'Vacuum / intake leak', mafBias:'MAF bias or contamination',
+    fuelDelivery:'Fuel delivery issue', exhaustO2:'Exhaust leak / O₂ issue', other:'Other'},
+  tests:[{
+    name:'Fuel trim at idle vs 2,500 RPM',
+    updates:{vacuumLeak:2.2, mafBias:.75, fuelDelivery:.7},
+    evidence:'<br><strong>Test:</strong> at 2,500 RPM combined fuel trim fell from +33% to +12%. ' +
+      'That pattern raises the probability of an intake/vacuum leak.',
+    status:'Next physical check: inspect the intake duct, PCV/vacuum hoses and obvious leak points. ' +
+      'A smoke test can confirm the leak before buying any part.'
+  }],
+  basketConfidence:'moderate',
+  basketRows:[
+    ['Vehicle-specific PCV / intake hose','Only after visual/smoke confirmation','View exact-fit part'],
+    ['Hose pliers','Clamp removal','Buy or loan'],
+    ['Smoke-test option','Confirms leak before replacing parts','Guide / shop referral'],
+    ['Repair video','Vehicle-specific replacement steps','Watch']],
+  verify:'<strong>Verification:</strong> rescan after repair, check short- and long-term fuel trims, ' +
+    'and watch for P0171 recurrence over several drive cycles.'
+},
+P030X: {
+  vehicle:'2016 Honda Civic 2.0L', vin:'VIN 2HGFC2F5… (demo)',
+  dtc:'P0302 — Cylinder 2 misfire detected',
+  scanStatus:'<strong>What the ECU detected:</strong> weak or absent combustion events, ' +
+    'dominated by cylinder 2. A misfire code names the cylinder, not the part. Next: check Mode 06 ' +
+    'per-cylinder misfire counts.',
+  scanEvidence:'Confirmed DTC: <strong>P0302</strong><br>Mode 06: cylinder 2 accounts for ' +
+    '<strong>85%</strong> of misfire events<br>No flashing MIL.',
+  priors:{ignitionCoil:.30, sparkPlug:.25, fuelInjector:.15, vacuumLeak:.10, compression:.08, other:.12},
+  labels:{ignitionCoil:'Ignition coil fault', sparkPlug:'Worn spark plug', fuelInjector:'Fuel injector fault',
+    vacuumLeak:'Vacuum leak', compression:'Low compression', other:'Other'},
+  tests:[{
+    name:'Mode 06 per-cylinder misfire counts',
+    updates:{ignitionCoil:1.6, sparkPlug:1.5, fuelInjector:.8, vacuumLeak:.6},
+    evidence:'<br><strong>Test:</strong> 85% of misfire counts are on cylinder 2 — a single-cylinder ' +
+      'fault, which points at ignition or fueling on that cylinder. Still not enough evidence for a part.',
+    status:'Not enough evidence yet — the discriminating test is a coil swap: move the cylinder-2 ' +
+      'coil to a healthy cylinder, clear codes, drive, and rescan.'
+  },{
+    name:'Coil swap test (misfire followed the coil)',
+    updates:{ignitionCoil:4.0},
+    evidence:'<br><strong>Test:</strong> after the swap, the misfire moved to the other cylinder — ' +
+      'the fault followed the coil. That is decisive.',
+    status:'The coil is the cause. Build the basket.'
+  }],
+  basketConfidence:'moderate',
+  basketRows:[
+    ['Ignition coil — cylinder 2','Misfire followed the coil in the swap test','View exact-fit part'],
+    ['Spark plug socket','Needed for coil access','Buy or loan'],
+    ['Repair video','Cylinder-specific replacement steps','Watch']],
+  verify:'<strong>Verification:</strong> rescan after repair and confirm Mode 06 misfire counts ' +
+    'stay at zero over several drive cycles.'
+},
+P0128: {
+  vehicle:'2015 Toyota Camry 2.5L', vin:'VIN 4T1BF1FK… (demo)',
+  dtc:'P0128 — Coolant temperature below thermostat regulating temperature',
+  scanStatus:'<strong>What the ECU detected:</strong> the engine did not reach expected operating ' +
+    'temperature in the expected time. This is a warm-up rationality fault, not a single sensor reading. ' +
+    'Next: log the warm-up curve from a cold start.',
+  scanEvidence:'Confirmed DTC: <strong>P0128</strong><br>Coolant after 10 min driving: ' +
+    '<strong>62 °C</strong> (expected ≥ 80 °C)<br>No overheating.',
+  priors:{thermostat:.40, ectSensor:.20, lowCoolant:.15, other:.25},
+  labels:{thermostat:'Thermostat stuck open', ectSensor:'Coolant temp sensor fault',
+    lowCoolant:'Low coolant', other:'Other'},
+  tests:[{
+    name:'Warm-up curve from cold start',
+    updates:{thermostat:2.5, ectSensor:.6, lowCoolant:.8},
+    evidence:'<br><strong>Test:</strong> coolant plateaued at 62 °C after 10 minutes of driving — ' +
+      'the thermostat is not closing. A dead sensor would read flat or erratic, which this is not.',
+    status:'The thermostat is stuck open. Build the basket.'
+  }],
+  basketConfidence:'moderate',
+  basketRows:[
+    ['Thermostat + gasket','Coolant never reached regulating temperature','View exact-fit part'],
+    ['Engine coolant','Refill after replacement','Buy'],
+    ['Drain pan','Catch coolant during the job','Buy or loan']],
+  verify:'<strong>Verification:</strong> refill and bleed the cooling system, then confirm the ' +
+    'warm-up curve reaches 85–95 °C within 10 minutes of driving.'
+},
+P0420: {
+  vehicle:'2014 Honda CR-V 2.4L', vin:'VIN 2HKRW2H5… (demo)',
+  dtc:'P0420 — Catalyst system efficiency below threshold (bank 1)',
+  scanStatus:'<strong>What the ECU detected:</strong> the converter is storing less oxygen than ' +
+    'expected, judged by comparing the two O₂ sensors. That does not prove the converter failed — ' +
+    'a lazy downstream sensor looks similar. Next: measure the O₂ switching ratio at cruise.',
+  scanEvidence:'Confirmed DTC: <strong>P0420</strong><br>O₂ switching ratio (downstream/upstream): ' +
+    '<strong>0.82</strong> at steady cruise<br>No flashing MIL.',
+  priors:{cat:.38, o2sensor:.22, exhaustLeak:.14, misfireHist:.10, other:.16},
+  labels:{cat:'Failing catalytic converter', o2sensor:'Downstream O₂ sensor fault',
+    exhaustLeak:'Exhaust leak', misfireHist:'Misfire history', other:'Other'},
+  tests:[{
+    name:'O₂ switching ratio at cruise',
+    updates:{cat:2.6, o2sensor:.7, exhaustLeak:.8, misfireHist:.9},
+    evidence:'<br><strong>Test:</strong> the downstream sensor is switching almost like the upstream ' +
+      'one (ratio 0.82) — the converter is not storing oxygen. But this alone is only moderate ' +
+      'evidence: a catalytic converter is expensive, so the basket stays empty.',
+    status:'Moderate evidence for the converter — not enough for a $1,000 part. Run the confirmation ' +
+      'test: downstream voltage swing at cruise.'
+  },{
+    name:'Downstream O₂ voltage swing (confirmation)',
+    updates:{cat:2.0, o2sensor:.6},
+    evidence:'<br><strong>Test:</strong> downstream voltage swings 0.65 V peak-to-peak — a healthy ' +
+      'converter holds it nearly flat. Two independent O₂ tests now agree.',
+    status:'Strong evidence. The converter is the cause — and only now does the basket offer one.'
+  }],
+  basketConfidence:'strong',
+  basketRows:[
+    ['Catalytic converter (bank 1)','Two independent O₂ tests agree — never from the code alone','View exact-fit part'],
+    ['O₂ sensor socket','Reuse or replace downstream sensor hardware','Buy or loan'],
+    ['Exhaust gaskets + hardware','Consumables for the job','Buy']],
+  verify:'<strong>Verification:</strong> the catalyst monitor needs several drive cycles to run — ' +
+    'confirm P0420 stays clear and the monitor shows ready.'
+},
+P0442: {
+  vehicle:'2017 Ford F-150 3.5L', vin:'VIN 1FTEW1E5… (demo)',
+  dtc:'P0442 — Evaporative emission system leak detected (small leak)',
+  scanStatus:'<strong>What the ECU detected:</strong> the sealed fuel-vapor system lost pressure — ' +
+    'a small leak somewhere. Small EVAP leaks are most often the gas cap or a cracked hose. ' +
+    'Next: inspect the gas cap seal.',
+  scanEvidence:'Confirmed DTC: <strong>P0442</strong><br>Gas cap seal: <strong>cracked and flattened</strong><br>' +
+    'No raw fuel smell.',
+  priors:{gasCap:.40, hose:.22, valve:.16, other:.22},
+  labels:{gasCap:'Loose / faulty gas cap', hose:'EVAP hose or canister leak',
+    valve:'Purge / vent valve fault', other:'Other'},
+  tests:[{
+    name:'Gas cap seal inspection',
+    updates:{gasCap:3.0, hose:.7, valve:.7},
+    evidence:'<br><strong>Test:</strong> the cap seal is cracked and flattened — it cannot hold ' +
+      'pressure. The cheapest fix goes first.',
+    status:'Replace the gas cap. Build the basket.'
+  }],
+  basketConfidence:'moderate',
+  basketRows:[
+    ['OE gas cap','Seal is cracked — the cheapest fix goes first','View exact-fit part']],
+  verify:'<strong>Verification:</strong> clear the code and drive normally for 3+ drive cycles — ' +
+    'the EVAP monitor only runs under specific conditions. If P0442 stays clear, the cap was the cause.'
+},
+P0133: {
+  vehicle:'2013 Toyota Corolla 1.8L', vin:'VIN 2T1BU4EE… (demo)',
+  dtc:'P0133 — O₂ sensor circuit slow response (bank 1, sensor 1)',
+  scanStatus:'<strong>What the ECU detected:</strong> the upstream O₂ sensor is switching between ' +
+    'lean and rich too slowly. The code does not say whether the sensor is worn, the exhaust is ' +
+    'leaking ahead of it, or the wiring is at fault. Next: count switches at 2,500 RPM.',
+  scanEvidence:'Confirmed DTC: <strong>P0133</strong><br>Upstream O₂: <strong>3 switches / 10 s</strong> ' +
+    'at 2,500 RPM (expected &gt; 8)<br>No exhaust tick audible.',
+  priors:{agingO2:.38, exhaustLeak:.20, wiring:.14, contaminated:.12, other:.16},
+  labels:{agingO2:'Aging O₂ sensor', exhaustLeak:'Exhaust leak ahead of sensor',
+    wiring:'Wiring / connector fault', contaminated:'Contaminated sensor', other:'Other'},
+  tests:[{
+    name:'O₂ response time at 2,500 RPM',
+    updates:{agingO2:2.4, contaminated:1.5, wiring:.9, exhaustLeak:.8},
+    evidence:'<br><strong>Test:</strong> 3 switches per 10 s with full amplitude — the sensor is ' +
+      'lazy but not dead or disconnected, which points at an aging element rather than wiring.',
+    status:'The upstream sensor is worn. Build the basket.'
+  }],
+  basketConfidence:'moderate',
+  basketRows:[
+    ['Upstream O₂ sensor (bank 1, sensor 1)','Switching rate far below spec; the sensor is lazy','View exact-fit part'],
+    ['O₂ sensor socket','Required for removal','Buy or loan']],
+  verify:'<strong>Verification:</strong> after a drive cycle, confirm the switching rate is back above ' +
+    '~8 switches per 10 s at 2,500 RPM and P0133 stays clear.'
+}};
 
+const state = {fam:'P0171', scanned:false, testIdx:0};
 const $ = id => document.getElementById(id);
 const pct = x => Math.round(x*100)+'%';
 const normalize = o => { const s=Object.values(o).reduce((a,b)=>a+b,0);
   return Object.fromEntries(Object.entries(o).map(([k,v])=>[k,v/s])); };
+const band = p => p>0.75?'Strong evidence':p>=0.45?'Moderate evidence':'Not enough evidence';
 
-function renderHypotheses(h){
+function renderHypotheses(fam, h){
   const sorted = Object.entries(h).sort((a,b)=>b[1]-a[1]);
   $('hypotheses').innerHTML = sorted.map(([k,v]) =>
-    `<div style="margin:8px 0"><strong>${LABELS[k]}</strong> — ${pct(v)}` +
+    `<div style="margin:8px 0"><strong>${fam.labels[k]}</strong> — ${pct(v)}` +
     `<div class="bar"><span style="width:${(v*100).toFixed(1)}%"></span></div></div>`).join('');
   return sorted[0];
 }
 
-function band(p){ return p>0.75?'Strong evidence':p>=0.45?'Moderate evidence':'Not enough evidence'; }
+function updateTestButton(){
+  const fam = FAMILIES[state.fam];
+  if(!state.scanned || state.testIdx >= fam.tests.length){ $('testBtn').disabled = true; return; }
+  $('testBtn').disabled = false;
+  $('testBtn').textContent = 'Run test: ' + fam.tests[state.testIdx].name;
+}
 
 function reset(){
-  state.scanned=false; state.tested=false;
+  state.fam = $('familySel').value;
+  state.scanned = false; state.testIdx = 0;
   $('vehicle').textContent='Not connected'; $('vin').textContent='VIN —';
   $('diagStatus').textContent='Idle'; $('dtc').textContent='No DTC';
   $('cause').textContent='—'; $('confidence').textContent='No evidence yet';
-  $('status').textContent='Plug in the dongle and tap Scan vehicle.';
+  $('status').textContent='Pick a fault family and tap Scan vehicle.';
   $('evidence').textContent='None yet.'; $('hypotheses').textContent='None yet.';
   $('basket').textContent='Not generated.';
-  $('testBtn').disabled=true; $('repairBtn').disabled=true;
+  updateTestButton(); $('repairBtn').disabled = true;
 }
 
-$('scanBtn').onclick=()=>{
-  state.scanned=true;
-  $('vehicle').textContent='2018 Ford Escape 1.5L';
-  $('vin').textContent='VIN 1FMCU0GD… (demo)';
-  $('diagStatus').textContent='Needs diagnosis';
-  $('dtc').textContent='P0171 — System too lean, bank 1';
-  $('status').innerHTML='<strong>What the ECU detected:</strong> it is adding more ' +
-    'fuel than expected. This does not identify a failed part. Next: compare fuel ' +
-    'trim at idle with fuel trim at 2,500 RPM.';
-  $('evidence').innerHTML='Confirmed DTC: <strong>P0171</strong><br>' +
-    'LTFT at idle: <strong>+22%</strong><br>STFT at idle: <strong>+11%</strong><br>' +
-    'MAF: plausible but not conclusive<br>No severe misfire detected.';
-  renderHypotheses(normalize({...PRIORS}));
-  $('testBtn').disabled=false;
+$('familySel').onchange = reset;
+
+$('scanBtn').onclick = () => {
+  const fam = FAMILIES[state.fam];
+  state.scanned = true; state.testIdx = 0;
+  $('vehicle').textContent = fam.vehicle;
+  $('vin').textContent = fam.vin;
+  $('diagStatus').textContent = 'Needs diagnosis';
+  $('dtc').textContent = fam.dtc;
+  $('status').innerHTML = fam.scanStatus;
+  $('evidence').innerHTML = fam.scanEvidence;
+  $('cause').textContent = '—';
+  $('confidence').textContent = 'No evidence yet';
+  renderHypotheses(fam, normalize({...fam.priors}));
+  updateTestButton();
 };
 
-$('testBtn').onclick=()=>{
+$('testBtn').onclick = () => {
   if(!state.scanned) return;
-  state.tested=true;
-  // Evidence: trims improve substantially at 2500 RPM (rule: trim_idle - trim_2500 >= 8).
-  const h={...PRIORS};
-  h.vacuumLeak*=2.2; h.mafBias*=0.75; h.fuelDelivery*=0.85; h.exhaustO2*=0.8;
-  const post=normalize(h);
-  const [top,p]=renderHypotheses(post);
-  $('cause').textContent=LABELS[top];
-  $('confidence').textContent=band(p)+' — '+pct(p);
-  $('diagStatus').textContent='Evidence updated';
-  $('evidence').innerHTML+='<br><strong>Test:</strong> at 2,500 RPM combined fuel trim ' +
-    'fell from +33% to +12%. That pattern raises the probability of an intake/vacuum leak.';
-  $('status').innerHTML='Next physical check: inspect the intake duct, PCV/vacuum hoses ' +
-    'and obvious leak points. A smoke test can confirm the leak before buying any part.';
-  $('repairBtn').disabled=false;
+  const fam = FAMILIES[state.fam];
+  const t = fam.tests[state.testIdx];
+  const h = {...fam.priors};
+  // Re-apply all completed tests so multi-test families accumulate evidence.
+  for(let i=0;i<=state.testIdx;i++){
+    for(const [k,m] of Object.entries(fam.tests[i].updates)) h[k]*=m;
+  }
+  const post = normalize(h);
+  const [top,p] = renderHypotheses(fam, post);
+  $('cause').textContent = fam.labels[top];
+  $('confidence').textContent = band(p)+' — '+pct(p);
+  $('diagStatus').textContent = 'Evidence updated';
+  $('evidence').innerHTML += t.evidence;
+  $('status').innerHTML = t.status;
+  state.testIdx++;
+  updateTestButton();
+  if(state.testIdx >= fam.tests.length) $('repairBtn').disabled = false;
 };
 
-$('repairBtn').onclick=()=>{
-  if(!state.tested) return;
-  $('basket').innerHTML=
-    `<table>
-      <tr><th>Item</th><th>Why</th><th>MVP action</th></tr>
-      <tr><td>Vehicle-specific PCV / intake hose</td><td>Only after visual/smoke confirmation</td><td>View exact-fit part</td></tr>
-      <tr><td>Hose pliers</td><td>Clamp removal</td><td>Buy or loan</td></tr>
-      <tr><td>Smoke-test option</td><td>Confirms leak before replacing parts</td><td>Guide / shop referral</td></tr>
-      <tr><td>Repair video</td><td>Vehicle-specific replacement steps</td><td>Watch</td></tr>
-    </table>
-    <p><strong>Verification:</strong> rescan after repair, check short- and long-term ` +
-    `fuel trims, and watch for P0171 recurrence over several drive cycles.</p>`;
-  $('status').innerHTML='<strong>Basket generated (confidence: moderate).</strong> ' +
-    'In production the retailer adapter resolves VIN fitment, local inventory, price, ' +
-    'loaner tools, and pickup location.';
+$('repairBtn').onclick = () => {
+  if(!state.scanned || state.testIdx < FAMILIES[state.fam].tests.length) return;
+  const fam = FAMILIES[state.fam];
+  const rows = fam.basketRows.map(r =>
+    `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+  $('basket').innerHTML =
+    `<table><tr><th>Item</th><th>Why</th><th>MVP action</th></tr>${rows}</table><p>${fam.verify}</p>`;
+  $('status').innerHTML = '<strong>Basket generated (confidence: ' + fam.basketConfidence + ').</strong> ' +
+    'In production the retailer adapter resolves VIN fitment, local inventory, price, loaner tools, ' +
+    'and pickup location.';
 };
 
-$('resetBtn').onclick=reset;
+$('resetBtn').onclick = reset;
 reset();
 </script>
 </body>

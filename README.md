@@ -34,7 +34,10 @@ obd-retail-mvp/
 ├── diagnostic-graphs/   Evidence graphs (JSON) + schema + authoring guide
 │   ├── p0171.json       Lean bank 1 (from the product doc)
 │   ├── p030x.json       Misfire family
-│   └── p0128.json       Thermostat rationality
+│   ├── p0128.json       Thermostat rationality
+│   ├── p0420.json       Catalyst efficiency (cat repair needs strong evidence)
+│   ├── p0442.json       EVAP small leak (drive-cycle verification notes)
+│   └── p0133.json       O2 sensor slow response
 ├── firmware/            C99 dongle firmware: BLE protocol framing, OBD
 │                        allowlist state machine, ISO-TP helpers, power mgmt
 ├── android/             Kotlin skeletons (pure Kotlin, no Android SDK deps):

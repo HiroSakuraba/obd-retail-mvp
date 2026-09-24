@@ -245,7 +245,7 @@ data class DiagnosisResult(
 )
 
 /**
- * @param graphJson one diagnostic-graphs/*.json document.
+ * @param graphJson one diagnostic-graphs JSON document.
  * @param observations testId -> field map. Guided tests use field "answer"
  *   with value 1.0 for "yes", 0.0 for "no".
  * @param flags safety observation flags, e.g. setOf("flashing_mil").
