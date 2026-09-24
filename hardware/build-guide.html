@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OBD BLE Dongle — Interactive Build Guide</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#121923; --panel2:#172231; --ink:#e8eef7; --muted:#9fb0c4;
+  --accent:#4ba3ff; --accent2:#7bd0ff; --ok:#43d17a; --warn:#ffcc66; --bad:#ff7676;
+  --line:#273446; --code:#091019;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+a{color:var(--accent2)}
+.wrap{max-width:1240px;margin:auto;padding:24px 18px 80px;display:grid;grid-template-columns:250px 1fr;gap:22px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.side{position:sticky;top:16px;align-self:start;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+@media(max-width:900px){.side{position:static}}
+.side h3{margin:0 0 10px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stage-link{display:flex;justify-content:space-between;align-items:center;gap:8px;text-decoration:none;color:var(--ink);padding:9px 10px;border-radius:10px;margin:4px 0;background:transparent;border:1px solid transparent}
+.stage-link:hover{background:var(--panel2)}
+.stage-link.active{background:#14283f;border-color:#2c4d75}
+.stage-link .pct{font-size:12px;color:var(--muted);min-width:38px;text-align:right}
+.prog{height:10px;background:#0a1119;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:12px 0 6px}
+.prog > div{height:100%;background:linear-gradient(90deg,#2f7fd0,#4ba3ff);width:0%;transition:width .25s}
+.overall-pct{font-size:28px;font-weight:700}
+.reset{margin-top:10px;width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;font-size:14px}
+.reset:hover{border-color:var(--bad);color:var(--bad)}
+.hero{border:1px solid var(--line);border-radius:20px;background:linear-gradient(135deg,#111923,#18283a 60%,#112235);padding:26px;margin-bottom:22px}
+.hero h1{margin:0 0 10px;font-size:clamp(26px,4vw,42px);line-height:1.1}
+.hero p{color:#c7d4e4;max-width:820px}
+.hero img{width:100%;border-radius:14px;border:1px solid var(--line);margin-top:16px;display:block}
+.stage{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:24px;margin-bottom:22px}
+.stage h2{margin:0 0 4px;font-size:26px}
+.stage .goal{color:var(--muted);margin:0 0 14px}
+h3.sub{margin:24px 0 8px;font-size:18px;color:var(--accent2)}
+.check{display:flex;gap:10px;align-items:flex-start;margin:9px 0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#0f1620;cursor:pointer}
+.check:hover{border-color:#3b536f}
+.check input{margin-top:4px;transform:scale(1.2);flex:none}
+.check.done{opacity:.62}
+.check.done .lbl{text-decoration:line-through}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#1a2a3c;color:var(--accent2);margin-left:8px;white-space:nowrap}
+.tag.warn{background:#2a2210;color:var(--warn)}
+table{width:100%;border-collapse:collapse;margin:12px 0;background:#0f1620;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:14.5px}
+th,td{padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{background:#172231;color:#cfe4fb}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#122030;padding:2px 5px;border-radius:5px;font-size:13.5px}
+pre{background:var(--code);color:#d7e8f9;border:1px solid var(--line);padding:16px;border-radius:12px;overflow:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;position:relative}
+.copybtn{position:absolute;top:8px;right:8px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;font-size:12px}
+.copybtn:hover{border-color:var(--accent);color:var(--accent2)}
+.prewrap{position:relative}
+.checkpoint{border:1px solid #2c5a36;background:#102319;border-radius:12px;padding:14px 16px;margin:16px 0}
+.checkpoint strong{color:var(--ok)}
+.warnbox{border-left:4px solid var(--warn);background:#241f12;padding:12px 16px;border-radius:10px;margin:14px 0}
+.warnbox.bad{border-color:var(--bad);background:#261616}
+.note{font-size:13.5px;color:var(--muted)}
+.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.node{padding:10px 13px;border:1px solid #3b536f;border-radius:12px;background:#142234;font-size:14px}
+.arrow{color:#74baff;font-weight:700}
+ol.steps{padding-left:22px} ol.steps li{margin:10px 0}
+.trouble{margin-top:8px}
+footer{color:var(--muted);font-size:13px;margin-top:30px}
+.ref li{margin:7px 0;font-size:14.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="side" aria-label="Stages">
+  <h3>Build stages</h3>
+  <div id="navlinks"></div>
+  <div class="prog"><div id="overallbar"></div></div>
+  <div><span class="overall-pct" id="overallpct">0%</span> <span class="note">complete</span></div>
+  <button class="reset" id="resetbtn">Reset all progress</button>
+  <p class="note" style="margin-top:12px">Progress is stored in this browser only (localStorage). Transcribed from the forwarded build guide — where the guide is vague, it's marked inline rather than filled in.</p>
+</nav>
+
+<main>
+<div class="hero">
+  <h1>OBD BLE Dongle — Interactive Build Guide</h1>
+  <p>A read-only OBD-II → Bluetooth Low Energy dongle, built bench-first: prove the electronics and firmware on the bench, connect it to a real car safely, pair it with the phone app, then shrink it into the low-profile production puck. Check off steps as you go.</p>
+  <img src="../docs/images/obd-dongle-render.jpg" alt="Product render: low-profile right-angle OBD-II dongle with status LED, and the companion phone app showing a P0171 diagnosis">
+</div>
+
+<!-- STAGE 1 -->
+<section class="stage" id="s-bench" data-stage="bench">
+<h2>1 · Bench assembly</h2>
+<p class="goal"><strong>Goal:</strong> wire the ESP32 DevKit + Adafruit CAN Pal + OBD breakout on the bench. Prove continuity, no shorts, termination OFF — before any firmware or any car.</p>
+
+<h3 class="sub">Parts for this stage</h3>
+<div id="parts-bench">
+<label class="check"><input type="checkbox" data-gid="p-devkit"><span class="lbl">ESP32 DevKit-class board <span class="note">— guide names no specific model; any DevKit-class board with BLE + TWAI-capable GPIOs works</span></span></label>
+<label class="check"><input type="checkbox" data-gid="p-canpal"><span class="lbl">Adafruit CAN Pal (TJA1051/T3) <span class="note">— 3.3 V logic, exposes CANH/CANL/GND + RX/TX</span></span></label>
+<label class="check"><input type="checkbox" data-gid="p-obdbreak"><span class="lbl">16-pin SAE J1962 male breakout plug or cable</span></label>
+<label class="check"><input type="checkbox" data-gid="p-powerbank"><span class="lbl">USB power bank <span class="note">— keeps electronics isolated from vehicle battery until comms work</span></span></label>
+<label class="check"><input type="checkbox" data-gid="p-jumpers"><span class="lbl">22–26 AWG jumpers / Dupont leads (1 set)</span></label>
+<label class="check"><input type="checkbox" data-gid="p-dmm"><span class="lbl">Digital multimeter <span class="note">— continuity, voltage, short checks</span></span></label>
+<label class="check"><input type="checkbox" data-gid="p-cansim"><span class="lbl">Bench CAN/OBD simulator <span class="tag">optional</span><span class="note"> — best way to verify frames before touching a real car</span></span></label>
+</div>
+
+<h3 class="sub">OBD-II pins used</h3>
+<table>
+<tr><th>J1962 pin</th><th>Signal</th><th>Use</th></tr>
+<tr><td>4</td><td>Chassis ground</td><td>Ground reference</td></tr>
+<tr><td>5</td><td>Signal ground</td><td>Ground reference</td></tr>
+<tr><td>6</td><td>CAN-H</td><td>ISO 15765-4 high line</td></tr>
+<tr><td>14</td><td>CAN-L</td><td>ISO 15765-4 low line</td></tr>
+<tr><td>16</td><td>Battery +</td><td><strong>Leave disconnected during the first communication test.</strong> Used later for standalone power only.</td></tr>
+</table>
+
+<h3 class="sub">Bench wiring</h3>
+<table>
+<tr><th>ESP32 DevKit</th><th>CAN Pal</th><th>OBD breakout</th><th>Notes</th></tr>
+<tr><td>3V3</td><td>Vcc</td><td>—</td><td>CAN Pal logic supply</td></tr>
+<tr><td>GND</td><td>GND</td><td>pins 4 + 5</td><td>Common reference</td></tr>
+<tr><td>GPIO 21</td><td>TX</td><td>—</td><td>TWAI transmit</td></tr>
+<tr><td>GPIO 22</td><td>RX</td><td>—</td><td>TWAI receive</td></tr>
+<tr><td>—</td><td>CANH</td><td>pin 6</td><td>CAN high</td></tr>
+<tr><td>—</td><td>CANL</td><td>pin 14</td><td>CAN low</td></tr>
+<tr><td>GND / low</td><td>SLNT</td><td>—</td><td>Normal transmit mode</td></tr>
+<tr><td>—</td><td><strong>Termination switch OFF</strong></td><td>—</td><td>Vehicle already has its termination</td></tr>
+</table>
+
+<h3 class="sub">Assembly steps</h3>
+<label class="check"><input type="checkbox" data-gid="b-solder"><span class="lbl"><strong>Solder headers / terminal block.</strong> Solder the CAN Pal header and CANH/CANL/GND terminal block. Inspect for bridges.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-logic"><span class="lbl"><strong>Wire logic only.</strong> Connect 3V3, GND, GPIO21→TX and GPIO22←RX. Do <em>not</em> connect the OBD plug yet.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-term"><span class="lbl"><strong>Disable CAN Pal termination.</strong> Move the onboard 120 Ω switch to OFF.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-cont"><span class="lbl"><strong>Continuity test.</strong> With everything unpowered, verify no short between 3V3–GND, CANH–GND, CANL–GND, or CANH–CANL.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-obd"><span class="lbl"><strong>Attach the OBD breakout.</strong> CANH→pin 6, CANL→pin 14, GND→pins 4 and/or 5. Leave pin 16 disconnected.</span></label>
+<label class="check"><input type="checkbox" data-gid="b-power"><span class="lbl"><strong>Power the ESP32 from the USB power bank.</strong> Do not use the car's battery rail yet.</span></label>
+
+<div class="checkpoint"><strong>✓ You should see:</strong> multimeter shows no shorts on any pair; termination switch physically OFF; ESP32 boots from the power bank; OBD pin 16 still disconnected. Nothing has talked to a car yet — that's stage 3.</div>
+
+<div class="warnbox"><strong>Stage pitfalls:</strong> no CAN traffic at all → wrong bit rate, ignition off, unpopulated CAN pins, or reversed wiring (try PID 00 first; inspect pins 6/14; test 500/250 kbit/s). Transmit errors / bus-off → wrong bit rate or physical wiring (stop transmitting, recover TWAI, re-verify CANH/CANL).</div>
+</section>
+<!-- STAGE 2 -->
+<section class="stage" id="s-firmware" data-stage="firmware">
+<h2>2 · Firmware bring-up</h2>
+<p class="goal"><strong>Goal:</strong> first read-only CAN test — request engine RPM (Mode 01 PID 0C), decode it, probe all four ISO 15765-4 protocol combinations, then implement ISO-TP multi-frame receive with flow control (VIN is the acceptance test).</p>
+
+<h3 class="sub">Parts for this stage</h3>
+<label class="check"><input type="checkbox" data-gid="p-espidf"><span class="lbl">ESP-IDF toolchain installed <span class="note">— ESP-IDF 5.5 introduced the newer <code>esp_driver_twai</code> API; the legacy <code>driver/twai.h</code> API remains available and is simpler for this bring-up program</span></span></label>
+<label class="check"><input type="checkbox" data-gid="p-cansim2"><span class="lbl">Bench CAN/OBD simulator connected <span class="tag">recommended</span><span class="note"> — prove frames before the car</span></span></label>
+
+<h3 class="sub">Step 1 — TWAI init + first RPM read</h3>
+<p class="note">Standard ISO-TP single-frame request for Mode 01 PID 0C, using the common 11-bit functional ID <code>0x7DF</code>. Copy into your ESP-IDF project:</p>
+<div class="prewrap"><button class="copybtn">Copy</button><pre>#include &lt;stdio.h&gt;
+#include "driver/twai.h"
+#include "esp_log.h"
+
+#define TX_GPIO GPIO_NUM_21
+#define RX_GPIO GPIO_NUM_22
+
+static const char *TAG = "obd";
+
+static void can_init_500k(void) {
+    twai_general_config_t g =
+        TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO, RX_GPIO, TWAI_MODE_NORMAL);
+    twai_timing_config_t t = TWAI_TIMING_CONFIG_500KBITS();
+    twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+    ESP_ERROR_CHECK(twai_driver_install(&amp;g, &amp;t, &amp;f));
+    ESP_ERROR_CHECK(twai_start());
+}
+
+static esp_err_t obd_send_mode01_pid(uint8_t pid) {
+    twai_message_t m = {0};
+    m.identifier = 0x7DF;       // functional OBD request, 11-bit
+    m.data_length_code = 8;
+    m.data[0] = 0x02;           // 2-byte payload follows
+    m.data[1] = 0x01;           // Mode 01: current data
+    m.data[2] = pid;
+    for (int i=3; i&lt;8; ++i) m.data[i] = 0x00;
+    return twai_transmit(&amp;m, pdMS_TO_TICKS(100));
+}
+
+static void wait_for_rpm(void) {
+    twai_message_t r;
+    int64_t deadline = esp_timer_get_time() + 1000000;
+
+    while (esp_timer_get_time() &lt; deadline) {
+        if (twai_receive(&amp;r, pdMS_TO_TICKS(100)) != ESP_OK) continue;
+
+        if (r.identifier &gt;= 0x7E8 &amp;&amp; r.identifier &lt;= 0x7EF &amp;&amp;
+            r.data_length_code == 8 &amp;&amp;
+            r.data[1] == 0x41 &amp;&amp; r.data[2] == 0x0C) {
+
+            uint16_t raw = ((uint16_t)r.data[3] &lt;&lt; 8) | r.data[4];
+            float rpm = raw / 4.0f;
+            ESP_LOGI(TAG, "RPM %.1f from ECU 0x%03lX",
+                     rpm, (unsigned long)r.identifier);
+            return;
+        }
+    }
+    ESP_LOGW(TAG, "No RPM response");
+}
+
+void app_main(void) {
+    can_init_500k();
+    ESP_ERROR_CHECK(obd_send_mode01_pid(0x0C));
+    wait_for_rpm();
+}</pre></div>
+<label class="check"><input type="checkbox" data-gid="f-rpm"><span class="lbl">Flash and run: ECU replies on <code>0x7E8</code>; engine-off decodes ≈ 0 RPM, idle gives a plausible idle RPM.</span></label>
+
+<h3 class="sub">Step 2 — protocol probing</h3>
+<p class="note">ISO 15765-4 allows 250 or 500 kbit/s with 11- or 29-bit identifiers — four standard combinations. Start with 11-bit / 500 kbit/s (the common one). If no valid reply, stop the TWAI driver and try the remaining combinations rather than guessing proprietary settings.</p>
+<label class="check"><input type="checkbox" data-gid="f-probe"><span class="lbl">Implement probing of all four standard combinations (250/500 kbit/s × 11/29-bit).</span></label>
+
+<h3 class="sub">Step 3 — VIN is multi-frame: ISO-TP done correctly</h3>
+<p class="note">A 17-character VIN usually needs a multi-frame ISO-TP response. After receiving a First Frame, the dongle <strong>must</strong> transmit a Flow Control frame to the responding ECU — transport-layer control, not an actuator command. If the response arrived on <code>0x7E8</code>, the matching physical tester request is <code>0x7E0</code>:</p>
+<div class="prewrap"><button class="copybtn">Copy</button><pre>// Minimal "continue to send" flow-control frame:
+static esp_err_t send_flow_control(uint32_t response_id) {
+    twai_message_t fc = {0};
+    fc.identifier = response_id - 8;  // e.g. 0x7E8 -&gt; 0x7E0
+    fc.data_length_code = 8;
+    fc.data[0] = 0x30; // Flow Status = Continue To Send
+    fc.data[1] = 0x00; // Block Size = 0 (unlimited until complete)
+    fc.data[2] = 0x00; // STmin = 0
+    return twai_transmit(&amp;fc, pdMS_TO_TICKS(100));
+}</pre></div>
+<p class="note">For production, move ISO-TP into a dedicated module tracking ECU ID, sequence numbers, total expected payload length, timeout, and frame order. Never concatenate responses from different ECU IDs.</p>
+<label class="check"><input type="checkbox" data-gid="f-isotp"><span class="lbl">ISO-TP receive + flow control implemented; VIN (Mode 09 PID 02) reassembles to a 17-character VIN as the acceptance test.</span></label>
+
+<h3 class="sub">Step 4 — read-only service allowlist</h3>
+<table>
+<tr><th>Operation</th><th>Service</th><th>MVP rule</th></tr>
+<tr><td>Current PIDs</td><td>01</td><td>Allow selected PID list only</td></tr>
+<tr><td>Freeze frame</td><td>02</td><td>Add once parser is tested</td></tr>
+<tr><td>Confirmed DTCs</td><td>03</td><td>Allow</td></tr>
+<tr><td>Clear DTCs</td><td>04</td><td><strong>Refuse</strong></td></tr>
+<tr><td>On-board monitor tests</td><td>06</td><td>Later: allow selected monitor reads</td></tr>
+<tr><td>Pending DTCs</td><td>07</td><td>Allow</td></tr>
+<tr><td>Vehicle information / VIN</td><td>09</td><td>Allow selected PIDs</td></tr>
+<tr><td>Permanent DTCs</td><td>0A</td><td>Allow</td></tr>
+</table>
+<label class="check"><input type="checkbox" data-gid="f-allow"><span class="lbl">Allowlist enforced in firmware: approved reads + ISO-TP flow control only. No service 04, no raw CAN, no proprietary commands.</span></label>
+
+<div class="checkpoint"><strong>✓ You should see:</strong> PID 00 lists supported PIDs; RPM decodes plausibly; VIN comes back as 17 characters after the flow-control frame; a traffic capture shows every transmitted frame is either an approved OBD request or a necessary flow-control frame.</div>
+<div class="warnbox"><strong>Stage pitfalls:</strong> VIN starts then stalls → missing ISO-TP flow control (send CTS to the ECU's matching physical request ID). Works on simulator, not car → 29-bit identifiers or a different standard bitrate (implement all four ISO 15765-4 combinations). Pending/permanent codes fail → parser only expects the Mode 03 response; expect SIDs 0x47 and 0x4A as well as 0x43.</div>
+</section>
+
+<!-- STAGE 3 -->
+<section class="stage" id="s-vehicle" data-stage="vehicle">
+<h2>3 · Vehicle connection</h2>
+<p class="goal"><strong>Goal:</strong> prove the scanner on a real parked car — USB-powered first, pin 16 last. Do these in order.</p>
+<div class="warnbox bad"><strong>Do not start with vehicle battery power.</strong> First prove the scanner using USB/power-bank power and only OBD ground + CAN-H + CAN-L. This isolates power-supply mistakes from protocol mistakes.</div>
+
+<label class="check"><input type="checkbox" data-gid="v-park"><span class="lbl"><strong>Park the vehicle.</strong> Transmission in Park, parking brake applied. First test stationary.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-inspect"><span class="lbl"><strong>Inspect the OBD connector.</strong> Confirm pins 6 and 14 are populated. This MVP targets CAN-based OBD-II.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-power"><span class="lbl"><strong>Power the dongle externally.</strong> USB power bank. Connect OBD ground, CAN-H and CAN-L only.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-ign"><span class="lbl"><strong>Turn ignition on.</strong> Do not start the engine for VIN/DTC testing. Use RPM only after the basic exchange is validated.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-pid00"><span class="lbl"><strong>Send PID 00 first.</strong> Mode 01 PID 00 asks which PIDs are supported. Record all responding ECU IDs.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-vin"><span class="lbl"><strong>Read VIN.</strong> Mode 09 PID 02. Confirm the reconstructed 17-character VIN matches the vehicle.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-dtc"><span class="lbl"><strong>Read DTCs.</strong> Mode 03, 07 and 0A separately, preserving status. Positive response SIDs differ: 0x43, 0x47 and 0x4A respectively.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-livepid"><span class="lbl"><strong>Read a harmless live PID.</strong> Coolant temperature, RPM or control-module voltage are useful sanity checks.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-capture"><span class="lbl"><strong>Capture traffic.</strong> Verify every transmitted frame is either an approved OBD request or a necessary ISO-TP flow-control frame.</span></label>
+<label class="check"><input type="checkbox" data-gid="v-pin16"><span class="lbl"><strong>Only then add OBD pin 16 power</strong> — via the protected buck front end described in stage 5. Never connect raw 12–14.4 V directly to the ESP32.</span></label>
+
+<div class="checkpoint"><strong>✓ You should see:</strong> VIN matches the vehicle; confirmed/pending/permanent codes arrive with their statuses intact; traffic capture is clean (approved requests + flow control only). The scanner matches a reference scan tool before you trust it.</div>
+<div class="warnbox"><strong>Stage pitfalls:</strong> transmit errors / bus-off → wrong bit rate or physical wiring (stop transmitting, recover TWAI). Works on simulator but not the car → 29-bit identifiers (probe all four combinations).</div>
+</section>
+
+<!-- STAGE 4 -->
+<section class="stage" id="s-phone" data-stage="phone">
+<h2>4 · Phone integration</h2>
+<p class="goal"><strong>Goal:</strong> a minimal BLE GATT service (one write, one notify characteristic) carrying semantic diagnostic requests — not raw CAN. Prove it with nRF Connect before touching the Android app.</p>
+
+<h3 class="sub">Parts for this stage</h3>
+<label class="check"><input type="checkbox" data-gid="p-nrf"><span class="lbl">Phone with the nRF Connect app installed <span class="note">— test the BLE link before debugging the Android application</span></span></label>
+
+<h3 class="sub">Message model</h3>
+<div class="prewrap"><button class="copybtn">Copy</button><pre>// Phone -&gt; dongle
+{"v":1,"id":"42","op":"read_pid","pid":"0C"}
+
+// Dongle -&gt; phone
+{"v":1,"id":"42","ok":true,"data":{"pid":"0C","value":742.0,"unit":"rpm"}}
+
+// Refused operation
+{"v":1,"id":"43","ok":false,"error":"ERROR_FORBIDDEN_COMMAND"}</pre></div>
+<p class="note">Firmware should expose operations like <code>read_vin</code>, <code>read_dtcs_confirmed</code>, <code>read_dtcs_pending</code>, <code>read_dtcs_permanent</code>, <code>read_pid</code>, and later <code>read_freeze_frame</code>. It must <strong>not</strong> expose an operation like <code>send_can_frame</code>.</p>
+
+<h3 class="sub">Bring-up steps</h3>
+<label class="check"><input type="checkbox" data-gid="a-adv"><span class="lbl"><strong>Advertise a service.</strong> Name the prototype something obvious, e.g. <code>Glovebox-OBD-DEV</code>.</span></label>
+<label class="check"><input type="checkbox" data-gid="a-nrf"><span class="lbl"><strong>Test with nRF Connect first.</strong> Prove the phone can write a request and receive a notification before debugging the Android app.</span></label>
+<label class="check"><input type="checkbox" data-gid="a-client"><span class="lbl"><strong>Wrap the BLE service in <code>ApprovedDongleBleClient</code>.</strong> The repo's android/ module already has the right abstraction — implement the production GATT transport behind it.</span></label>
+<label class="check"><input type="checkbox" data-gid="a-diag"><span class="lbl"><strong>Keep diagnosis above transport.</strong> The dongle reports vehicle evidence; the phone decides which diagnostic graph and measurement recipe to run.</span></label>
+
+<div class="checkpoint"><strong>✓ You should see:</strong> phone writes <code>read_pid 0C</code>, gets an rpm notification back; anything outside the allowlist returns <code>ERROR_FORBIDDEN_COMMAND</code>; no raw-CAN BLE API exists anywhere.</div>
+<div class="warnbox"><strong>Stage pitfalls:</strong> BLE works but the app can't diagnose → transport is returning raw values without a normalized measurement recipe; map PID streams into named evidence fields before scoring.</div>
+</section>
+<!-- STAGE 5 -->
+<section class="stage" id="s-custom" data-stage="custom">
+<h2>5 · Custom Rev A PCB</h2>
+<p class="goal"><strong>Goal:</strong> shrink the bench prototype into a low-profile puck: ESP32-C3-MINI-1 + TCAN3404-Q1 + LM5164-Q1 + automotive protection + right-angle J1962 connector. Don't start this until the bench build works end to end.</p>
+
+<h3 class="sub">Parts for this stage</h3>
+<label class="check"><input type="checkbox" data-gid="c-u1"><span class="lbl"><strong>U1 — ESP32-C3-MINI-1</strong> (preferably extended-temperature variant). BLE, firmware, TWAI controller, flash, crystal, RF matching, antenna — integrated, so no antenna-matching design for Rev A.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-u2"><span class="lbl"><strong>U2 — TI TCAN3404-Q1.</strong> Automotive CAN transceiver on the same 3.3 V rail as the ESP32-C3 (no separate 5 V regulator). AEC-Q100, standby/shutdown.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-u3"><span class="lbl"><strong>U3 — TI LM5164-Q1.</strong> 6–100 V → 3.3 V buck, low quiescent current, automotive-rated. The guide notes this choice alone does <em>not</em> make the board ISO 7637/ISO 16750 compliant — layout and transient testing still required.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-d1"><span class="lbl"><strong>D1 — input TVS.</strong> 33 V class bidirectional automotive TVS. <span class="tag warn">guide vague</span><span class="note"> — "final part after transient validation"; no firm part number given</span></span></label>
+<label class="check"><input type="checkbox" data-gid="c-d2"><span class="lbl"><strong>D2 — reverse-polarity element.</strong> 60 V+ Schottky for Rev A (ideal-diode MOSFET stage for production).</span></label>
+<label class="check"><input type="checkbox" data-gid="c-f1"><span class="lbl"><strong>F1 — input protection.</strong> ~250 mA resettable PTC / fuse (limits fault current from OBD pin 16).</span></label>
+<label class="check"><input type="checkbox" data-gid="c-d3"><span class="lbl"><strong>D3 — CAN ESD array.</strong> Nexperia PESD2CANFD24V-T class device.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-l1"><span class="lbl"><strong>L1 — CAN common-mode choke.</strong> TDK ACT45B series. <span class="tag">optional</span><span class="note"> — populate only if EMC testing says it's useful</span></span></label>
+<label class="check"><input type="checkbox" data-gid="c-led"><span class="lbl"><strong>LED1 — status LED.</strong> Low-current blue/green LED + resistor (pairing / scan status).</span></label>
+<label class="check"><input type="checkbox" data-gid="c-j1"><span class="lbl"><strong>J1 — right-angle 16-pin J1962 male connector.</strong> Direct plug into the vehicle.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-tp"><span class="lbl"><strong>TPx — test pads:</strong> 3V3, GND, UART/JTAG, CANH, CANL, EN, BOOT (programming + factory test).</span></label>
+
+<h3 class="sub">Block diagram</h3>
+<div class="flow">
+<div class="node">OBD pin 16<br>12–14.4 V</div><div class="arrow">→</div>
+<div class="node">PTC + reverse protection + TVS</div><div class="arrow">→</div>
+<div class="node">LM5164-Q1<br>3.3 V</div><div class="arrow">→</div>
+<div class="node">ESP32-C3-MINI-1</div>
+</div>
+<div class="flow">
+<div class="node">ESP32 TWAI TX/RX</div><div class="arrow">↔</div>
+<div class="node">TCAN3404-Q1</div><div class="arrow">↔</div>
+<div class="node">ESD / optional choke</div><div class="arrow">↔</div>
+<div class="node">OBD pins 6/14</div>
+</div>
+
+<h3 class="sub">PCB layout checklist</h3>
+<label class="check"><input type="checkbox" data-gid="c-pwr1"><span class="lbl">Power front end: PTC → reverse protection → TVS near the connector → wide-input buck → input bulk + ceramic capacitance per the regulator reference design → 3.3 V decoupling at MCU and transceiver.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-pwr2"><span class="lbl">No raw 12–14.4 V path to the MCU anywhere on the board.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-can1"><span class="lbl"><strong>No 120 Ω terminator</strong> across CAN-H/CAN-L on the board.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-can2"><span class="lbl">ESD protection placed close to J1962 pins 6 and 14; CAN-H/CAN-L routed as a close pair with symmetric geometry.</span></label>
+<label class="check"><input type="checkbox" data-gid="c-rf"><span class="lbl">Module at the PCB edge; Espressif antenna keep-out obeyed — no ground pour, copper, connector metal, or enclosure features under/in front of the antenna region. Switching-regulator current loops kept away from the antenna keep-out and the CAN pair.</span></label>
+
+<h3 class="sub">Suggested PCB partition</h3>
+<div class="prewrap"><button class="copybtn">Copy</button><pre> [J1962 connector]
+  |  CAN pins     | battery pin
+  |               |
+ [ESD]          [PTC/TVS/reverse]
+  |               |
+ [TCAN3404]     [LM5164]
+       \          /
+        \  3V3   /
+       [ESP32-C3-MINI-1] ---- antenna edge/keep-out
+              |
+          test pads</pre></div>
+
+<div class="checkpoint"><strong>✓ You should see:</strong> the Rev A release checklist (next stage) passing; the OBD-powered board surviving bench reverse-polarity and transient tests; ignition-off sleep current measured and sane.</div>
+<div class="warnbox"><strong>Stage pitfalls:</strong> vehicle battery drains → ESP32/transceiver never enter sleep (measure ignition-off current; use CAN transceiver shutdown + MCU deep sleep). Unreliable radio → antenna blocked by connector/copper/dash (honor the keep-out; test in actual under-dash geometry).</div>
+</section>
+
+<!-- STAGE 6 -->
+<section class="stage" id="s-production" data-stage="production">
+<h2>6 · Production path</h2>
+<p class="goal"><strong>Goal:</strong> prove Rev A, then cost down — never the reverse. The cheap product is a consequence of a working design, not the thing that prevents the first design from working.</p>
+
+<h3 class="sub">Rev A release checks</h3>
+<label class="check"><input type="checkbox" data-gid="r-sim"><span class="lbl">Bench firmware reads PID 00 and RPM from the simulator.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-sid"><span class="lbl">Mode 03/07/0A parsers correctly accept 0x43/0x47/0x4A response SIDs.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-vin"><span class="lbl">VIN ISO-TP reassembly passes multi-frame test vectors.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-fc"><span class="lbl">Flow-control frames are generated only for an active approved response.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-noraw"><span class="lbl">No raw-CAN BLE API exists.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-5veh"><span class="lbl">Scanner matches a reference scan tool on at least five vehicles.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-probe"><span class="lbl">250/500 kbit/s and 11/29-bit protocol probing is implemented.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-trans"><span class="lbl">OBD-powered board survives bench reverse-polarity and transient tests.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-sleep"><span class="lbl">Sleep current is measured with vehicle ignition off.</span></label>
+<label class="check"><input type="checkbox" data-gid="r-ble"><span class="lbl">BLE reconnect works after sleep/wake and phone replacement.</span></label>
+
+<h3 class="sub">Stage roadmap</h3>
+<table>
+<tr><th>Stage</th><th>Goal</th><th>Hardware philosophy</th></tr>
+<tr><td>Bench</td><td>Prove OBD ↔ phone ↔ diagnostic engine</td><td>Modules, jumper wires, external USB power</td></tr>
+<tr><td>Rev A</td><td>Prove vehicle-powered compact board</td><td>Certified radio module + automotive CAN + automotive buck</td></tr>
+<tr><td>Rev B</td><td>Drive cost and size down</td><td>Bare MCU, tuned antenna, smaller packages, production connector</td></tr>
+<tr><td>Pilot</td><td>50–500 real units</td><td>Environmental, sleep-current, return-rate and compatibility data</td></tr>
+<tr><td>Retail</td><td>Large-volume giveaway</td><td>DFM, automated programming/test, molded shell, secure provisioning</td></tr>
+</table>
+<p class="note">Only after Rev A works should the module be replaced by a bare ESP32-class SoC and discrete RF section — that saves money and PCB area but creates RF-layout, antenna-tuning, and certification work.</p>
+</section>
+
+<!-- TROUBLESHOOTING -->
+<section class="stage" id="s-trouble" data-stage="trouble">
+<h2>Troubleshooting reference</h2>
+<p class="goal"><strong>Goal:</strong> one table for the whole build. Same rows appear as stage pitfalls where relevant.</p>
+<table class="trouble">
+<tr><th>Symptom</th><th>Likely cause</th><th>Check</th></tr>
+<tr><td>No CAN traffic at all</td><td>Wrong bit rate, ignition off, no CAN pins, wiring reversed</td><td>Try PID 00; inspect pins 6/14; test 500/250 kbit/s.</td></tr>
+<tr><td>Transmit errors / bus-off</td><td>Wrong bit rate or physical wiring</td><td>Stop transmitting, recover TWAI, verify CANH/CANL and bitrate.</td></tr>
+<tr><td>Works on simulator, not car</td><td>29-bit identifiers or different standard bitrate</td><td>Implement all four ISO 15765-4 combinations.</td></tr>
+<tr><td>VIN starts then stalls</td><td>Missing ISO-TP flow control</td><td>Send CTS flow-control to the ECU's matching physical request ID.</td></tr>
+<tr><td>Pending/permanent codes fail</td><td>Parser only expects Mode 03 response</td><td>Expect response SIDs 0x47 and 0x4A as well as 0x43.</td></tr>
+<tr><td>BLE works but app cannot diagnose</td><td>Transport returns raw values without normalized measurement recipe</td><td>Map PID streams into named evidence fields before scoring.</td></tr>
+<tr><td>Vehicle battery drains</td><td>ESP32/transceiver never enter sleep</td><td>Measure ignition-off current; use CAN transceiver shutdown + MCU deep sleep.</td></tr>
+<tr><td>Unreliable radio</td><td>Antenna blocked by connector/copper/dash</td><td>Honor module antenna keep-out and test in actual under-dash geometry.</td></tr>
+</table>
+
+<h3 class="sub">Source notes (from the guide)</h3>
+<ul class="ref">
+<li>Espressif ESP32-C3-MINI-1 datasheet — Bluetooth LE, TWAI, integrated flash/crystal/antenna module.</li>
+<li>ESP-IDF TWAI documentation — current driver architecture.</li>
+<li>Adafruit CAN Pal pinout — TX/RX/CANH/CANL and selectable termination.</li>
+<li>TI TCAN3404-Q1 — automotive single-3.3-V CAN transceiver.</li>
+<li>TI LM5164-Q1 — 6–100 V automotive buck converter with low quiescent current.</li>
+<li>CSS Electronics OBD2 / ISO 15765-4 overview — 250/500 kbit/s, 11/29-bit identifiers, common OBD request IDs.</li>
+<li>TI automotive battery input protection reference design (TIDA-01167).</li>
+<li>Nexperia CAN ESD protection family; TDK ACT45B automotive CAN common-mode choke.</li>
+</ul>
+<p class="note">The guide's own disclaimer: this is a prototype engineering plan, not a claim of automotive compliance. Production hardware needs electrical-transient, EMC/EMI, RF, environmental, thermal, sleep-current, and mechanical validation before unattended long-term installation in customer vehicles.</p>
+</section>
+
+<footer>
+<p>Transcribed from the forwarded build guide (received 23 Sept 2026). Full parts tables: <a href="bom.md">hardware/bom.md</a>. Cost model: <a href="../docs/hardware-bom.md">docs/hardware-bom.md</a>.</p>
+</footer>
+</main>
+</div>
+
+<script>
+// DOM-free core: testable under node with a fake storage object.
+function createGuideCore() {
+  let state = {};
+  return {
+    load: function (storage) {
+      try { state = JSON.parse(storage.getItem('obd-build-guide-v1')) || {}; }
+      catch (e) { state = {}; }
+      return state;
+    },
+    save: function (storage) {
+      try { storage.setItem('obd-build-guide-v1', JSON.stringify(state)); } catch (e) {}
+    },
+    set: function (id, checked) {
+      if (checked) state[id] = true; else delete state[id];
+    },
+    progress: function (ids) {
+      const done = ids.filter(function (id) { return !!state[id]; }).length;
+      return { done: done, total: ids.length,
+               pct: ids.length ? Math.round(done / ids.length * 100) : 0 };
+    },
+    reset: function (storage) {
+      state = {};
+      try { storage.removeItem('obd-build-guide-v1'); } catch (e) {}
+    },
+    ids: function () { return Object.keys(state); }
+  };
+}
+
+(function () {
+  if (typeof document === 'undefined' || typeof localStorage === 'undefined') return;
+  const core = createGuideCore();
+  const boxes = Array.prototype.slice.call(document.querySelectorAll('input[data-gid]'));
+  const stages = [
+    { key: 'bench', label: '1 · Bench assembly', href: '#s-bench' },
+    { key: 'firmware', label: '2 · Firmware bring-up', href: '#s-firmware' },
+    { key: 'vehicle', label: '3 · Vehicle connection', href: '#s-vehicle' },
+    { key: 'phone', label: '4 · Phone integration', href: '#s-phone' },
+    { key: 'custom', label: '5 · Custom Rev A PCB', href: '#s-custom' },
+    { key: 'production', label: '6 · Production path', href: '#s-production' },
+    { key: 'trouble', label: 'Troubleshooting', href: '#s-trouble' }
+  ];
+  const stageOf = function (box) {
+    const s = box.closest('[data-stage]');
+    return s ? s.getAttribute('data-stage') : '';
+  };
+
+  function update() {
+    const all = boxes.map(function (b) { return b.getAttribute('data-gid'); });
+    const p = core.progress(all);
+    document.getElementById('overallbar').style.width = p.pct + '%';
+    document.getElementById('overallpct').textContent = p.pct + '%';
+    stages.forEach(function (st) {
+      const ids = boxes.filter(function (b) { return stageOf(b) === st.key; })
+                       .map(function (b) { return b.getAttribute('data-gid'); });
+      const sp = core.progress(ids);
+      const el = document.getElementById('navpct-' + st.key);
+      if (el) el.textContent = ids.length ? sp.pct + '%' : '—';
+      const link = document.getElementById('navlink-' + st.key);
+      if (link) link.classList.toggle('active', sp.pct === 100 && ids.length > 0);
+    });
+    boxes.forEach(function (b) {
+      const lbl = b.closest('.check');
+      if (lbl) lbl.classList.toggle('done', b.checked);
+    });
+  }
+
+  // Build nav links
+  const nav = document.getElementById('navlinks');
+  stages.forEach(function (st) {
+    const a = document.createElement('a');
+    a.className = 'stage-link'; a.href = st.href; a.id = 'navlink-' + st.key;
+    const s = document.createElement('span'); s.textContent = st.label;
+    const pct = document.createElement('span'); pct.className = 'pct'; pct.id = 'navpct-' + st.key;
+    a.appendChild(s); a.appendChild(pct); nav.appendChild(a);
+  });
+
+  core.load(localStorage);
+  boxes.forEach(function (b) {
+    const gid = b.getAttribute('data-gid');
+    b.checked = core.ids().indexOf(gid) !== -1;
+    b.addEventListener('change', function () {
+      core.set(gid, b.checked);
+      core.save(localStorage);
+      update();
+    });
+  });
+  document.getElementById('resetbtn').addEventListener('click', function () {
+    if (!window.confirm('Clear all build-guide progress?')) return;
+    core.reset(localStorage);
+    boxes.forEach(function (b) { b.checked = false; });
+    update();
+  });
+
+  // Copy buttons
+  document.querySelectorAll('.prewrap').forEach(function (w) {
+    const btn = w.querySelector('.copybtn');
+    const pre = w.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      const done = function () { btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pre.textContent).then(done, function(){ btn.textContent = 'Failed'; });
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = pre.textContent; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Failed'; }
+        document.body.removeChild(ta);
+      }
+    });
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>

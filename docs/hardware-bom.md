@@ -2,6 +2,14 @@
 
 Target: a giveaway-cheap, deliberately boring dongle. Read-only by design.
 
+![Product render: low-profile OBD-II dongle with the companion app](images/obd-dongle-render.jpg)
+
+> For the buildable parts list (bench prototype + custom Rev A PCB, transcribed
+> from the forwarded hardware build guide), see
+> [`hardware/bom.md`](../hardware/bom.md) and the interactive workshop page
+> [`hardware/build-guide.html`](../hardware/build-guide.html). This doc is the
+> cost model; that one is the shopping/workshop list.
+
 **On the "$3 dongle":** treat $3 as an engineering *target and hypothesis*,
 not an established figure — the numbers below are component+assembly
 targets at very high volume, before certification, packaging, logistics,

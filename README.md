@@ -19,6 +19,8 @@ recommendation** — "no recommendation yet" always beats a confident wrong part
 
 ## Safety stance
 
+![Product render: low-profile OBD-II dongle with the companion app](docs/images/obd-dongle-render.jpg)
+
 - The dongle firmware is a **strict read-only allowlist**: six OBD services
   (01/02/03/07/09/0A), a fixed PID list, everything else refused. The device
   may transmit only allowlisted diagnostic requests plus the transport-layer
@@ -65,7 +67,11 @@ obd-retail-mvp/
 │                        terminal, scripted app scan (open index.html)
 ├── .github/workflows/   CI: :core Kotlin tests + pytest + firmware tests
 ├── docs/                threat model, privacy model, hardware BOM,
-│                        M1 bench test plan
+│                        M1 bench test plan; docs/images/obd-dongle-render.jpg
+│                        (product render: low-profile dongle + app)
+├── hardware/            Build parts list (hardware/bom.md, transcribed from
+│                        the forwarded build guide) and the interactive
+│                        step-by-step workshop page (hardware/build-guide.html)
 └── demo/                Standalone interactive browser demo (open index.html)
 ```
 
